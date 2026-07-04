@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Procedura „HAK" — sekcja WOT</title>
+<style>
+  :root{
+    --paper:#EAE4CF; --contour:#CDBD92; --forest:#AFC49B; --road:#D8C9A6; --roadedge:#8A7C5A;
+    --ink:#23281E; --friendly:#1E4D2B; --trail:#B03A2E; --alert:#E03616;
+    --panel:#3E4A30; --panel-ink:#EDE7D3; --panel-dim:#B8B49A;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--panel); color:var(--panel-ink);
+    font-family:'Courier New',Courier,monospace;
+    display:flex; flex-direction:column; overflow:hidden;
+    height:100dvh;
+  }
+  header{
+    padding:8px 12px 6px; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+    border-bottom:1px solid rgba(237,231,207,.25);
+  }
+  header h1{
+    font-family:'Arial Narrow',Arial,sans-serif; font-weight:900; text-transform:uppercase;
+    letter-spacing:.14em; font-size:17px;
+  }
+  header .sub{font-size:11px; color:var(--panel-dim); letter-spacing:.06em}
+  #mapwrap{flex:1; min-height:0; display:flex; justify-content:center; background:var(--panel); position:relative}
+  svg{height:100%; width:100%; display:block}
+
+  /* phase strip */
+  #phasebar{
+    display:flex; align-items:center; gap:8px; padding:7px 12px;
+    border-top:1px solid rgba(237,231,207,.25);
+  }
+  #phasenum{
+    font-family:'Arial Narrow',Arial,sans-serif; font-weight:900; font-size:15px;
+    background:var(--panel-ink); color:var(--panel); padding:2px 7px; letter-spacing:.08em;
+    white-space:nowrap;
+  }
+  #phasename{
+    font-family:'Arial Narrow',Arial,sans-serif; font-weight:900; text-transform:uppercase;
+    letter-spacing:.1em; font-size:14px; white-space:nowrap;
+  }
+  #phasedesc{
+    padding:0 12px 8px; font-size:12px; line-height:1.45; color:var(--panel-dim); min-height:36px;
+  }
+  #phasedesc b{color:var(--panel-ink)}
+
+  /* controls */
+  #controls{
+    display:flex; gap:8px; padding:0 12px 10px; align-items:stretch;
+  }
+  button{
+    font-family:'Courier New',monospace; font-weight:700; font-size:14px;
+    background:transparent; color:var(--panel-ink); border:1.5px solid var(--panel-ink);
+    padding:9px 0; flex:1; cursor:pointer; letter-spacing:.05em;
+  }
+  button:active{background:var(--panel-ink); color:var(--panel)}
+  button.primary{background:var(--panel-ink); color:var(--panel)}
+  button:disabled{opacity:.35}
+  #row2{display:flex; gap:8px; padding:0 12px 12px}
+  #row2 button{font-size:12px; padding:8px 0}
+  #btnErr{border-color:#E8A199; color:#E8A199}
+  #btnErr.on{background:var(--alert); border-color:var(--alert); color:#fff}
+
+  /* legend / opis overlay */
+  #legend,#opis{
+    position:absolute; inset:0; background:rgba(35,40,30,.93); display:none;
+    padding:18px 16px; overflow-y:auto; z-index:20;
+  }
+  #legend.show,#opis.show{display:block}
+  #legend h2,#opis h2{
+    font-family:'Arial Narrow',Arial,sans-serif; text-transform:uppercase; letter-spacing:.12em;
+    font-size:15px; margin-bottom:12px; color:var(--panel-ink);
+  }
+  #opis h3{
+    font-family:'Arial Narrow',Arial,sans-serif; text-transform:uppercase; letter-spacing:.1em;
+    font-size:13px; margin:14px 0 5px; color:var(--panel-ink);
+  }
+  #opis p,#opis li{font-size:12.5px; line-height:1.55; color:var(--panel-dim)}
+  #opis b{color:var(--panel-ink)}
+  #opis ol,#opis ul{padding-left:18px}
+  #opis li{margin-bottom:4px}
+  #legend table{width:100%; border-collapse:collapse; font-size:12.5px}
+  #legend td{padding:5px 6px; border-bottom:1px solid rgba(237,231,207,.15); color:var(--panel-dim)}
+  #legend td:first-child{color:var(--panel-ink); font-weight:700; width:34px}
+  #legend td:nth-child(2){color:var(--panel-ink); width:52px}
+  #legend .sekt{font-size:11px}
+  #legend .close,#opis .close{margin-top:14px; width:100%}
+  #legend .note,#opis .note{font-size:11px; color:var(--panel-dim); margin-top:12px; line-height:1.5}
+
+  /* alert banner */
+  #alertbox{
+    position:absolute; top:14%; left:50%; transform:translateX(-50%);
+    background:var(--alert); color:#fff; font-family:'Arial Narrow',Arial,sans-serif;
+    font-weight:900; text-transform:uppercase; letter-spacing:.1em; font-size:16px;
+    padding:10px 18px; display:none; z-index:15; box-shadow:0 4px 18px rgba(0,0,0,.45);
+    animation:shake .5s infinite;
+  }
+  #alertbox.show{display:block}
+  #okbox{
+    position:absolute; top:14%; left:50%; transform:translateX(-50%);
+    background:#2C6B3F; color:#fff; font-family:'Arial Narrow',Arial,sans-serif;
+    font-weight:900; text-transform:uppercase; letter-spacing:.1em; font-size:15px;
+    padding:9px 16px; display:none; z-index:15;
+  }
+  #okbox.show{display:block}
+  @keyframes shake{
+    0%,100%{transform:translateX(-50%) rotate(0)}
+    25%{transform:translateX(-51%) rotate(-1deg)}
+    75%{transform:translateX(-49%) rotate(1deg)}
+  }
+  /* soldier tap card */
+  #card{
+    position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
+    background:var(--panel-ink); color:var(--panel); font-size:12.5px; font-weight:700;
+    padding:7px 14px; display:none; z-index:15; white-space:nowrap;
+  }
+  #card.show{display:block}
+  @media (prefers-reduced-motion: reduce){ #alertbox{animation:none} }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Procedura „HAK"</h1>
+  <span class="sub">SZKIC TAKTYCZNY · SEKCJA SLP · 12 ŻOŁN.</span>
+</header>
+
+<div id="mapwrap">
+  <svg id="map" viewBox="0 0 1000 1200" preserveAspectRatio="xMidYMid meet" aria-label="Szkic procedury HAK"></svg>
+
+  <div id="legend">
+    <h2>Skład sekcji — sektory w nasłuchu</h2>
+    <table id="legtable"></table>
+    <div class="note">
+      Szyk wg ustawienia jednostki: <b>ALFA (1–6) z przodu, BETA (7–12) z tyłu</b>.
+      Flanki ubezpieczają pary: <b>1–2 flanka płn</b> · <b>11–12 flanka płd</b> (w tym wejście w HAK).
+      Środek 3–10 — ognie na pierwotną drogę. Żaden promień nie idzie wzdłuż kolumny.<br>
+      (Poradnik przy swojej numeracji podaje: 1—kierunek, 2 i 11—tył, 3–10—droga, 12—wejście.)<br><br>
+      Zasada bezpieczeństwa: zmiana stanowiska <b>zawsze za plecami linii</b> —
+      nigdy nie przechodź przed lufą kolegi.
+    </div>
+    <button class="close" onclick="toggleLegend()">ZAMKNIJ</button>
+  </div>
+
+  <div id="opis">
+    <h2>Procedura „HAK" — opis taktyki</h2>
+
+    <h3>Cel</h3>
+    <p>Skryta, nieprzerwana obserwacja własnej trasy przemarszu z jednoczesnym
+    ubezpieczeniem sekcji w pełnym okręgu (360°). Sprawdzamy, czy przeciwnik
+    nie podąża naszym śladem.</p>
+
+    <h3>Kiedy wykonujemy</h3>
+    <ul>
+      <li>okresowo w marszu — sugerowane co ok. <b>1 h</b> (częstotliwość ustala dowódca przy planowaniu trasy);</li>
+      <li>przed zajęciem <b>Bazy Przejściowej</b> — punkt wyjścia do rekonesansu rejonu;</li>
+      <li>do wykonania <b>zasadzki doraźnej</b> (nieplanowanej);</li>
+      <li>na komendę dowódcy w innym celu.</li>
+    </ul>
+
+    <h3>Przebieg (wężyk — trasa się nie przecina)</h3>
+    <ol>
+      <li>Sygnał „HAK" → <b>zmniejszamy odstępy</b>, kolejność szyku bez zmian.</li>
+      <li>Zejście z trasy w bok (tu: w lewo) — na max odległość, ale punkt zejścia „E" <b>widoczny i pod ogniem</b>.</li>
+      <li>Marsz <b>równolegle do trasy, w kierunku przeciwnym</b>.</li>
+      <li>Drugi skręt — <b>dalej od trasy</b> — i marsz z powrotem na pierwotny kierunek.</li>
+      <li>Stój na wysokości pkt „E": linia równoległa do trasy, front jak pierwotnie.</li>
+    </ol>
+
+    <h3>Ustawienie na linii</h3>
+    <p><b>ALFA (1–6) z przodu, BETA (7–12) z tyłu.</b>
+    Flanki ubezpieczają pary rozstawione obok siebie:
+    <b>1–2</b> flanka północna (2 z lewej strony 1),
+    <b>11–12</b> flanka południowa (11 obok 12) — kryją tył i wejście w HAK.
+    Środek <b>3–10</b>: ognie skupione na pierwotną drogę.</p>
+
+    <h3>Bezpieczeństwo</h3>
+    <ul>
+      <li><b>Nigdy nie przechodzimy przed lufą</b> — zmiana stanowiska wyłącznie za plecami linii.</li>
+      <li>Żaden sektor ognia nie może iść wzdłuż kolumny (w kolegów).</li>
+      <li>Zajmowanie stanowisk od czoła, wejście na pozycję od strony zakrytej.</li>
+    </ul>
+
+    <h3>Nasłuch</h3>
+    <p>Cisza, obserwacja i nasłuch pierwotnej trasy — <b>minimum 15 minut</b>;
+    czas reguluje dowódca. Brak kontaktu → wykonujemy zaplanowane działanie
+    lub kontynuujemy marsz.</p>
+
+    <p class="note">Uwaga: „trasa" nie musi być drogą — przy marszu na azymut
+    HAK wykonuje się równolegle do azymutu przemarszu.
+    Opracowano na podstawie „Poradnika żołnierza WOT" (rozdz. 3.6), układ sekcji wg ustaleń jednostki.</p>
+
+    <button class="close" onclick="toggleOpis()">ZAMKNIJ</button>
+  </div>
+
+  <div id="alertbox">⚠ STÓJ! PRZED LUFĄ!</div>
+  <div id="okbox">✓ TAK — ZA PLECAMI LINII</div>
+  <div id="card"></div>
+</div>
+
+<div id="phasebar">
+  <span id="phasenum">PKT 1</span>
+  <span id="phasename">Marsz ubezpieczony</span>
+</div>
+<div id="phasedesc">Rzędówka. Odstępy normalne. „1" prowadzi na kierunku.</div>
+
+<div id="controls">
+  <button id="btnRst" title="od nowa">⟲</button>
+  <button id="btnPrev" title="poprzedni punkt">⏮</button>
+  <button id="btnPlay" class="primary">▶ START</button>
+  <button id="btnNext" title="następny punkt">⏭</button>
+  <button id="btnSpd">×1</button>
+</div>
+<div id="row2">
+  <button id="btnOpis">OPIS</button>
+  <button id="btnLeg">LEGENDA</button>
+  <button id="btnErr" disabled>⚠ POKAŻ BŁĄD</button>
+</div>
+
+<script>
+"use strict";
+/* ================= DANE ================= */
+/* Szyk wg ustawienia Łukasza: ALFA (1–6) z przodu, BETA (7–12) z tyłu.
+   Sektory: żaden promień nie może iść wzdłuż kolumny (w kolegów). */
+const ROLES = [
+  /* — ALFA — para czołowa: 2 rozstawiony po LEWEJ (zach.) stronie 1 */
+  {n:1, kod:"SAP", nazwa:"Saper (ALFA)",                    sekt:"flanka płn (czoło)",       ang:25,  team:"A"},
+  {n:2, kod:"SW",  nazwa:"Nawigator — mł. strz. wyborowy",  sekt:"flanka płn (czoło)",       ang:330, team:"A"},
+  {n:3, kod:"CEL", nazwa:"Mł. celowniczy",                  sekt:"pierwotna droga",          ang:62,  team:"A"},
+  {n:4, kod:"RTF", nazwa:"Mł. radiotelefonista",            sekt:"pierwotna droga",          ang:70,  team:"A"},
+  {n:5, kod:"ZD",  nazwa:"Z-ca dowódcy",                    sekt:"pierwotna droga",          ang:78,  team:"A"},
+  {n:6, kod:"RAT", nazwa:"Mł. medyk",                       sekt:"pierwotna droga",          ang:86,  team:"A"},
+  /* — BETA — para tylna 11–12 ubezpiecza flankę PŁD */
+  {n:7, kod:"SAP", nazwa:"St. saper (BETA)",                sekt:"pierwotna droga",          ang:94,  team:"B"},
+  {n:8, kod:"SW",  nazwa:"Nawigator — st. strz. wyborowy",  sekt:"pierwotna droga",          ang:102, team:"B"},
+  {n:9, kod:"CEL", nazwa:"St. celowniczy",                  sekt:"pierwotna droga",          ang:110, team:"B"},
+  {n:10,kod:"RTF", nazwa:"St. radiotelefonista",            sekt:"pierwotna droga",          ang:118, team:"B"},
+  /* — BETA — para tylna: 11 rozstawiony obok 12 (strona zach.) */
+  {n:11,kod:"D",   nazwa:"Dowódca",                         sekt:"flanka płd / wejście w HAK", ang:210, team:"B"},
+  {n:12,kod:"RAT", nazwa:"St. medyk",                       sekt:"flanka płd (tył)",           ang:155, team:"B"},
+];
+/* winieta: mł. radio (4) melduje się u dowódcy (11) */
+const MOVER=3, TARGET=10; /* indeksy 0-bazowe */
+
+/* trasa lidera — WĘŻYK (nie przecina się, jak na szkicu):
+   droga(płn) → w lewo → wstecz(środkowy pas) → dalej w lewo → na płn(pas zewn.) */
+const WPTS = [
+  [560,1560],  // start (poza kadrem, dół)
+  [560,760],   // sygnał „HAK"
+  [560,470],   // punkt zejścia E
+  [400,485],   // 1. skręt: w lewo od drogi
+  [400,830],   // równolegle wstecz (pas środkowy)
+  [300,830],   // 2. skręt: dalej od drogi
+  [300,470],   // marsz na płn pasem zewnętrznym → stój: „1" na równi z pkt E
+];
+const SLOT_X = 300, SLOT_Y0 = 470, SLOT_DY = 22;
+const ROAD_X = 560;
+
+/* fazy */
+const PHASES = [
+  {num:"PKT 1", name:"Marsz ubezpieczony",
+   desc:'Rzędówka. Odstępy normalne. „1" prowadzi na kierunku.'},
+  {num:"PKT 2", name:"Sygnał „HAK”",
+   desc:'Zmniejszyć odstępy. <b>Utrzymać kolejność szyku</b> — ułatwi powrót do marszu.'},
+  {num:"PKT 3", name:"Zejście z trasy",
+   desc:'W lewo, na max odległość — ale punkt zejścia <b>„E" widoczny i pod ogniem</b>.'},
+  {num:"PKT 4", name:"Marsz równoległy wstecz",
+   desc:'Równolegle do pierwotnej trasy, kierunek <b>przeciwny</b>.'},
+  {num:"PKT 5", name:"Wężyk — zajęcie linii",
+   desc:'Drugi skręt od drogi i marsz z powrotem na kierunek — <b>trasa się nie przecina</b>. Linia <b>na skraju lasu</b>, równolegle do trasy, na wysokości pkt „E".'},
+  {num:"PKT 6", name:"Sektory / zmiana stanowisk",
+   desc:'Ubezpieczenie 360°, ognie na trasę. Mł. radio melduje się u dowódcy — zmiana stanowiska <b>tylko za plecami linii, nigdy przed lufą</b>.'},
+  {num:"PKT 7", name:"Nasłuch — min. 15 minut",
+   desc:'Cisza, obserwacja i nasłuch pierwotnej trasy. Czas reguluje <b>dowódca</b> (min. 15 min).'},
+  {num:"KONIEC", name:"Brak kontaktu",
+   desc:'Przeciwnik nie podąża śladem → <b>wykonać zadanie</b> / kontynuować marsz. ⟲ aby powtórzyć.'},
+];
+
+/* ================= GEOMETRIA ================= */
+function buildPath(w){
+  const seg=[], cum=[0]; let L=0;
+  for(let i=1;i<w.length;i++){
+    const dx=w[i][0]-w[i-1][0], dy=w[i][1]-w[i-1][1];
+    const l=Math.hypot(dx,dy); seg.push(l); L+=l; cum.push(L);
+  }
+  return {w,seg,cum,L};
+}
+const P = buildPath(WPTS);
+function pointAt(d){
+  d=Math.max(0,Math.min(d,P.L-0.001));
+  let i=1; while(P.cum[i]<d) i++;
+  const t=(d-P.cum[i-1])/P.seg[i-1];
+  const a=P.w[i-1], b=P.w[i];
+  return {x:a[0]+(b[0]-a[0])*t, y:a[1]+(b[1]-a[1])*t,
+          ang:Math.atan2(b[0]-a[0], -(b[1]-a[1]))*180/Math.PI}; /* 0°=północ */
+}
+function distTo(idx){return P.cum[idx];}
+const D_SIGNAL=distTo(1), D_EXIT=distTo(2), D_W3=distTo(3), D_W4=distTo(4), D_END=P.L;
+const SPACE_LOOSE=34, SPACE_TIGHT=22;
+
+/* ================= SVG ================= */
+const NS="http://www.w3.org/2000/svg";
+const svg=document.getElementById("map");
+function el(tag,attrs,parent){
+  const e=document.createElementNS(NS,tag);
+  for(const k in attrs) e.setAttribute(k,attrs[k]);
+  (parent||svg).appendChild(e); return e;
+}
+
+/* --- tło mapy --- */
+el("rect",{x:0,y:0,width:1000,height:1200,fill:"var(--paper)"});
+const deko=el("g",{});
+/* siatka */
+for(let x=0;x<=1000;x+=100) el("line",{x1:x,y1:0,x2:x,y2:1200,stroke:"var(--contour)","stroke-width":.7,opacity:.55},deko);
+for(let y=0;y<=1200;y+=100) el("line",{x1:0,y1:y,x2:1000,y2:y,stroke:"var(--contour)","stroke-width":.7,opacity:.55},deko);
+/* lasy: pas lasu na zachodzie — prosta linia drzew (tam staje linia sekcji) */
+const treePts=[[312,300],[318,370],[308,440],[316,510],[306,580],[314,650],[304,720],[312,790],[306,845]];
+let forestD="M"+treePts.map(p=>p[0]+","+p[1]).join(" L")+" L0,845 L0,300 Z";
+el("path",{d:forestD,fill:"var(--forest)",opacity:.6},deko);
+el("path",{d:"M"+treePts.map(p=>p[0]+","+p[1]).join(" L"),fill:"none",stroke:"#7E9970","stroke-width":2.5},deko);
+const tl=el("text",{x:120,y:585,fill:"#5F7A54","font-size":26,"font-weight":"bold","font-family":"Arial Narrow","letter-spacing":"6"},deko);
+tl.textContent="L A S";
+/* pozostałe kępy (wschód) */
+[[720,980,140,80],[760,240,130,75]].forEach(f=>{
+  el("ellipse",{cx:f[0],cy:f[1],rx:f[2],ry:f[3],fill:"var(--forest)",opacity:.6},deko);
+});
+/* poziomice */
+[[80,430,"M60,430 q90,-40 180,0 t180,10"],[700,700,"M640,700 q120,-50 240,-10"]].forEach(c=>{
+  el("path",{d:c[2],fill:"none",stroke:"var(--contour)","stroke-width":1.4,opacity:.8},deko);
+});
+/* droga = pierwotna trasa */
+el("rect",{x:ROAD_X-22,y:0,width:44,height:1200,fill:"var(--road)"},deko);
+el("line",{x1:ROAD_X-22,y1:0,x2:ROAD_X-22,y2:1200,stroke:"var(--roadedge)","stroke-width":2},deko);
+el("line",{x1:ROAD_X+22,y1:0,x2:ROAD_X+22,y2:1200,stroke:"var(--roadedge)","stroke-width":2},deko);
+el("line",{x1:ROAD_X,y1:0,x2:ROAD_X,y2:1200,stroke:"var(--roadedge)","stroke-width":1.4,"stroke-dasharray":"14 18",opacity:.7},deko);
+/* strzałka kierunku marszu */
+el("path",{d:`M${ROAD_X},95 l-13,26 h26 z`,fill:"var(--ink)",opacity:.75},deko);
+const t1=el("text",{x:ROAD_X+34,y:112,fill:"var(--ink)","font-size":20,"font-family":"Courier New",opacity:.8},deko);
+t1.textContent="KIERUNEK MARSZU";
+const t2=el("text",{x:ROAD_X+34,y:136,fill:"var(--ink)","font-size":18,"font-family":"Courier New",opacity:.6},deko);
+t2.textContent="(pierwotna trasa)";
+/* róża północy */
+el("path",{d:"M930,70 l-10,34 10,-10 10,10 z",fill:"var(--ink)"},deko);
+const tn=el("text",{x:922,y:126,fill:"var(--ink)","font-size":24,"font-weight":"bold","font-family":"Arial Narrow"},deko);
+tn.textContent="N";
+/* skala */
+el("line",{x1:60,y1:1150,x2:220,y2:1150,stroke:"var(--ink)","stroke-width":3},deko);
+el("line",{x1:60,y1:1142,x2:60,y2:1158,stroke:"var(--ink)","stroke-width":3},deko);
+el("line",{x1:220,y1:1142,x2:220,y2:1158,stroke:"var(--ink)","stroke-width":3},deko);
+const ts=el("text",{x:96,y:1136,fill:"var(--ink)","font-size":17,"font-family":"Courier New"},deko);
+ts.textContent="0——100 m";
+
+/* planowany HAK (podgląd, przerywany) */
+let prev="M"+WPTS[2][0]+","+WPTS[2][1];
+for(let i=3;i<WPTS.length;i++) prev+=" L"+WPTS[i][0]+","+WPTS[i][1];
+el("path",{d:prev,fill:"none",stroke:"var(--trail)","stroke-width":2,"stroke-dasharray":"7 9",opacity:.4});
+
+/* punkt E */
+el("circle",{cx:WPTS[2][0],cy:WPTS[2][1],r:9,fill:"none",stroke:"var(--trail)","stroke-width":3});
+const te=el("text",{x:WPTS[2][0]+16,y:WPTS[2][1]-12,fill:"var(--trail)","font-size":24,"font-weight":"bold","font-family":"Arial Narrow"});
+te.textContent="E — punkt zejścia";
+
+/* ślad przebyty (kredka sztabowa) */
+const trailEl=el("path",{d:"",fill:"none",stroke:"var(--trail)","stroke-width":3.5,"stroke-linejoin":"round",opacity:.85});
+
+/* warstwy */
+const coneLayer=el("g",{});
+const vigLayer=el("g",{});
+const soldierLayer=el("g",{});
+const pulseLayer=el("g",{});
+
+/* --- żołnierze --- */
+const soldiers = ROLES.map((r)=>{
+  const g=el("g",{cursor:"pointer"},soldierLayer);
+  const weapon=el("line",{x1:0,y1:0,x2:0,y2:-19,stroke:"var(--ink)","stroke-width":3.5,"stroke-linecap":"round"},g);
+  el("circle",{cx:0,cy:0,r:12,fill:"var(--friendly)",stroke:"var(--paper)","stroke-width":2},g);
+  const num=el("text",{x:0,y:4.5,fill:"#fff","font-size":13,"font-weight":"bold","text-anchor":"middle","font-family":"Arial"},g);
+  num.textContent=r.n;
+  const lab=el("text",{x:16,y:5,fill:"var(--ink)","font-size":15,"font-weight":"bold","font-family":"Courier New"},g);
+  lab.textContent=r.kod;
+  g.addEventListener("pointerdown",()=>showCard(r));
+  return {r,g,weapon,lab,x:0,y:0,facing:0};
+});
+function placeSoldier(s,x,y,facing){
+  s.x=x;s.y=y;s.facing=facing;
+  s.g.setAttribute("transform",`translate(${x},${y})`);
+  s.weapon.setAttribute("transform",`rotate(${facing})`);
+  /* etykieta po stronie zachodniej gdy linia, wschodniej w marszu */
+  const west = x<=SLOT_X+2 && inPosition;
+  s.lab.setAttribute("x", west?-16:16);
+  s.lab.setAttribute("text-anchor", west?"end":"start");
+}
+
+/* --- stożki sektorów --- */
+function conePath(ang,len,half){
+  const a1=(ang-half)*Math.PI/180, a2=(ang+half)*Math.PI/180;
+  const p=(a)=>[Math.sin(a)*len,-Math.cos(a)*len];
+  const [x1,y1]=p(a1),[x2,y2]=p(a2);
+  return `M0,0 L${x1},${y1} A${len},${len} 0 0 1 ${x2},${y2} Z`;
+}
+const cones = ROLES.map(r=>{
+  const g=el("g",{opacity:0},coneLayer);
+  const len = (r.ang>55 && r.ang<125) ? 300 : 200; /* sektory na drogę — dłuższe */
+  const c=el("path",{d:conePath(r.ang,len,15),fill:"rgba(192,57,43,.22)",stroke:"rgba(176,58,46,.55)","stroke-width":1.2},g);
+  return {g,c,r,shown:false};
+});
+/* stanowiska: pary flankowe obok siebie (2 i 11 wysunięci na zachód — za linią) */
+const SLOTS=[
+  [300,470], /* 1  czoło, oś — na równi z E */
+  [270,470], /* 2  obok 1, z lewej  */
+  [300,496],[300,518],[300,540],[300,562],       /* 3–6  ALFA  */
+  [300,596],[300,618],[300,640],[300,662],       /* 7–10 BETA  */
+  [270,688], /* 11 obok 12          */
+  [300,688], /* 12 tył, oś          */
+];
+function slotPos(i){return {x:SLOTS[i][0], y:SLOTS[i][1]};}
+
+/* etykiety podsekcji ALFA / BETA (widoczne po zajęciu linii) */
+const teamLayer=el("g",{opacity:0});
+[["ALFA",0,5],["BETA",6,11]].forEach(([nm,a,b])=>{
+  const y1=slotPos(a).y-12, y2=slotPos(b).y+12, x=SLOT_X-74;
+  el("line",{x1:x,y1:y1,x2:x,y2:y2,stroke:"var(--ink)","stroke-width":2},teamLayer);
+  el("line",{x1:x,y1:y1,x2:x+7,y2:y1,stroke:"var(--ink)","stroke-width":2},teamLayer);
+  el("line",{x1:x,y1:y2,x2:x+7,y2:y2,stroke:"var(--ink)","stroke-width":2},teamLayer);
+  const t=el("text",{x:x-8,y:(y1+y2)/2,"text-anchor":"middle",fill:"var(--ink)",
+    "font-size":19,"font-weight":"bold","font-family":"Arial Narrow",
+    transform:`rotate(-90 ${x-8} ${(y1+y2)/2})`},teamLayer);
+  t.textContent=nm;
+});
+
+/* ================= STAN / SILNIK ================= */
+const D_START=430;
+let leaderD=D_START, spacing=SPACE_LOOSE, playing=false, speed=1;
+let clock=0;              /* czas po zatrzymaniu (PKT6/7) */
+let inPosition=false;     /* linia zajęta */
+let errMode=false;        /* winieta błędu */
+let phaseIdx=0;
+const speeds=[1,2,0.5];
+let spdI=0;
+
+const SPEED_UPS=150; /* jedn./s */
+function spacingAt(d){
+  const t=Math.max(0,Math.min(1,(d-D_SIGNAL)/90));
+  return SPACE_LOOSE+(SPACE_TIGHT-SPACE_LOOSE)*t;
+}
+
+/* winieta: MOVER melduje się u TARGET (mł. radio → dowódca) */
+function vigPathOK(){
+  const ym=slotPos(MOVER).y, yt=slotPos(TARGET).y;
+  return [[SLOT_X,ym],[264,ym],[264,yt-26]];
+}
+function vigPathERR(){
+  const ym=slotPos(MOVER).y, yt=slotPos(TARGET).y;
+  return [[SLOT_X,ym],[336,ym],[336,yt-40],[264,yt-26]];
+}
+function pathLen(pts){let L=0;for(let i=1;i<pts.length;i++)L+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);return L;}
+function pathPoint(pts,t){ /* t 0..1 */
+  const total=pathLen(pts); let d=t*total;
+  for(let i=1;i<pts.length;i++){
+    const l=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);
+    if(d<=l){const u=d/l;return {x:pts[i-1][0]+(pts[i][0]-pts[i-1][0])*u, y:pts[i-1][1]+(pts[i][1]-pts[i-1][1])*u};}
+    d-=l;
+  }
+  const p=pts[pts.length-1];return {x:p[0],y:p[1]};
+}
+
+/* harmonogram po zatrzymaniu (sekundy „clock") */
+function schedule(){
+  const conesEnd=3.0;
+  if(!errMode){
+    return {conesEnd, vigStart:3.0, vigOut:5.4, vigWait:6.2, vigBack:8.6,
+            listenStart:9.0, listenEnd:15.0, endAt:15.0, err:false};
+  }
+  return {conesEnd, vigStart:3.0, vigOut:6.2, vigWait:6.8, vigBack:9.4, /* błąd: wolniej + flesze */
+          okStart:9.6, okOut:11.6, okWait:12.2, okBack:14.4,
+          listenStart:15.0, listenEnd:21.0, endAt:21.0, err:true};
+}
+
+/* ================= RENDER ================= */
+const alertbox=document.getElementById("alertbox");
+const okbox=document.getElementById("okbox");
+let flashSet=new Set();
+
+function render(){
+  /* --- faza marszu --- */
+  if(leaderD<D_END){
+    inPosition=false;
+    spacing=spacingAt(leaderD);
+    soldiers.forEach((s,i)=>{
+      const d=Math.max(0,leaderD-i*spacing);
+      const p=pointAt(d);
+      placeSoldier(s,p.x,p.y,p.ang);
+    });
+    /* ślad od punktu E */
+    if(leaderD>D_EXIT){
+      let d=D_EXIT, str="M"+WPTS[2][0]+","+WPTS[2][1];
+      const step=14;
+      while(d<leaderD){d=Math.min(d+step,leaderD);const q=pointAt(d);str+=` L${q.x.toFixed(1)},${q.y.toFixed(1)}`;}
+      trailEl.setAttribute("d",str);
+    }
+    cones.forEach(c=>{c.g.setAttribute("opacity",0);c.shown=false;});
+    teamLayer.setAttribute("opacity",0);
+    pulseLayer.innerHTML="";
+    alertbox.classList.remove("show"); okbox.classList.remove("show");
+    phaseIdx = leaderD<D_SIGNAL?0 : leaderD<D_EXIT?1 : leaderD<D_W3?2 : leaderD<D_W4?3 : 4;
+  }
+  /* --- linia zajęta: PKT 6/7 --- */
+  else{
+    inPosition=true;
+    teamLayer.setAttribute("opacity",1);
+    const S=schedule();
+    /* rozstawienie: płynne przejście z rzędówki na stanowiska (0–0.9 s) */
+    const st=Math.min(1,clock/0.9), e=st*st*(3-2*st);
+    soldiers.forEach((s,i)=>{
+      const fx=SLOT_X, fy=SLOT_Y0+SLOT_DY*i;    /* koniec rzędówki */
+      const sp=slotPos(i);
+      placeSoldier(s, fx+(sp.x-fx)*e, fy+(sp.y-fy)*e, ROLES[i].ang);
+    });
+    /* stożki kolejno — zakotwiczone w żołnierzu */
+    const away = (clock>=S.vigStart&&clock<S.vigBack)||(S.err&&clock>=S.okStart&&clock<S.okBack);
+    cones.forEach((c,i)=>{
+      const t0=(i/12)*S.conesEnd;
+      const on = clock>=t0 && !(i===MOVER&&away);
+      if(on&&!c.shown){c.shown=true;}
+      const flash=flashSet.has(i+1);
+      c.g.setAttribute("transform",`translate(${soldiers[i].x},${soldiers[i].y})`);
+      c.g.setAttribute("opacity", on?1:0);
+      c.c.setAttribute("fill", flash?"rgba(224,54,22,.55)":"rgba(192,57,43,.22)");
+      c.c.setAttribute("stroke", flash?"var(--alert)":"rgba(176,58,46,.55)");
+    });
+
+    /* winieta ruchu MOVER → TARGET */
+    const sM=soldiers[MOVER];
+    flashSet.clear(); alertbox.classList.remove("show"); okbox.classList.remove("show");
+    const okPts=vigPathOK(), errPts=vigPathERR();
+
+    function moveAlong(pts,t){const p=pathPoint(pts,t);placeSoldier(sM,p.x,p.y,ROLES[MOVER].ang);}
+
+    if(clock>=S.vigStart && clock<S.vigBack){
+      const pts = S.err?errPts:okPts;
+      if(clock<S.vigOut){
+        const t=(clock-S.vigStart)/(S.vigOut-S.vigStart);
+        moveAlong(pts,t);
+        if(S.err){
+          /* flesz każdego stożka „na drogę" mijanego od przodu */
+          const p=pathPoint(pts,t);
+          const lo=Math.min(MOVER,TARGET), hi=Math.max(MOVER,TARGET);
+          for(let i=lo+1;i<hi;i++){
+            const a=ROLES[i].ang;
+            if(a>55&&a<125 && p.x>SLOT_X+8 && Math.abs(p.y-slotPos(i).y)<26) flashSet.add(i+1);
+          }
+          if(flashSet.size) alertbox.classList.add("show");
+        }
+      }else if(clock<S.vigWait){ moveAlong(pts,1); if(S.err) alertbox.classList.add("show"); }
+      else{ const t=1-(clock-S.vigWait)/(S.vigBack-S.vigWait); moveAlong(pts,Math.max(0,t)); }
+    }
+    /* w trybie błędu: po powrocie pokaz poprawny */
+    else if(S.err && clock>=S.okStart && clock<S.okBack){
+      okbox.classList.add("show");
+      if(clock<S.okOut){ moveAlong(okPts,(clock-S.okStart)/(S.okOut-S.okStart)); }
+      else if(clock<S.okWait){ moveAlong(okPts,1); }
+      else{ moveAlong(okPts, Math.max(0,1-(clock-S.okWait)/(S.okBack-S.okWait))); }
+    }
+
+    /* nasłuch: pulsy + timer */
+    pulseLayer.innerHTML="";
+    if(clock>=S.listenStart && clock<S.listenEnd){
+      phaseIdx=6;
+      const u=(clock-S.listenStart)%1.4/1.4;
+      const r=20+u*120;
+      const c=el("circle",{cx:SLOT_X,cy:(SLOT_Y0+slotPos(11).y)/2,r:r,fill:"none",
+        stroke:"var(--friendly)","stroke-width":2,opacity:(1-u)*.5},pulseLayer);
+      /* timer 15:00 -> 0 */
+      const frac=(clock-S.listenStart)/(S.listenEnd-S.listenStart);
+      const sec=Math.max(0,Math.round(900*(1-frac)));
+      const mm=String(Math.floor(sec/60)).padStart(2,"0"), ss=String(sec%60).padStart(2,"0");
+      const tt=el("text",{x:SLOT_X,y:SLOT_Y0-46,"text-anchor":"middle",fill:"var(--trail)",
+        "font-size":30,"font-weight":"bold","font-family":"Courier New"},pulseLayer);
+      tt.textContent="⏱ "+mm+":"+ss;
+    }else if(clock>=S.endAt){ phaseIdx=7; playing=false; setPlayBtn(); }
+    else phaseIdx=5;
+  }
+  setPhase(phaseIdx);
+}
+
+/* ================= UI ================= */
+const elNum=document.getElementById("phasenum"),
+      elName=document.getElementById("phasename"),
+      elDesc=document.getElementById("phasedesc"),
+      btnPlay=document.getElementById("btnPlay"),
+      btnErr=document.getElementById("btnErr"),
+      card=document.getElementById("card");
+let lastPhase=-1;
+function setPhase(i){
+  if(i===lastPhase) return; lastPhase=i;
+  elNum.textContent=PHASES[i].num;
+  elName.textContent=PHASES[i].name;
+  elDesc.innerHTML=PHASES[i].desc;
+  btnErr.disabled = !(i>=5);
+}
+function setPlayBtn(){btnPlay.textContent = playing?"⏸ PAUZA":"▶ START"; btnPlay.classList.toggle("primary",!playing);}
+let cardT=null;
+function showCard(r){
+  card.textContent=`${r.n} · ${r.nazwa} — sektor: ${r.sekt}`;
+  card.classList.add("show");
+  clearTimeout(cardT); cardT=setTimeout(()=>card.classList.remove("show"),2600);
+}
+function toggleLegend(){document.getElementById("legend").classList.toggle("show");}
+function toggleOpis(){document.getElementById("opis").classList.toggle("show");}
+document.getElementById("btnLeg").onclick=toggleLegend;
+document.getElementById("btnOpis").onclick=toggleOpis;
+
+/* legenda */
+const legtable=document.getElementById("legtable");
+ROLES.forEach(r=>{
+  const tr=document.createElement("tr");
+  tr.innerHTML=`<td>${r.n}</td><td>${r.kod}</td><td>${r.nazwa}</td><td class="sekt">${r.sekt}</td>`;
+  legtable.appendChild(tr);
+});
+
+/* przyciski */
+btnPlay.onclick=()=>{playing=!playing; setPlayBtn();};
+document.getElementById("btnRst").onclick=()=>{
+  leaderD=D_START; clock=0; errMode=false; btnErr.classList.remove("on");
+  playing=false; setPlayBtn(); lastPhase=-1;
+  trailEl.setAttribute("d",""); render();
+};
+document.getElementById("btnSpd").onclick=(e)=>{
+  spdI=(spdI+1)%speeds.length; speed=speeds[spdI];
+  e.target.textContent="×"+speed;
+};
+btnErr.onclick=()=>{
+  errMode=true; btnErr.classList.add("on");
+  leaderD=D_END; clock=3.0; playing=true; setPlayBtn();
+};
+
+/* punkty skoku (⏮ ⏭) */
+function marks(){
+  const S=schedule();
+  return [
+    {d:D_START,c:0},{d:D_SIGNAL,c:0},{d:D_EXIT,c:0},{d:D_W3,c:0},{d:D_W4,c:0},
+    {d:D_END,c:0},{d:D_END,c:S.vigStart},{d:D_END,c:S.listenStart},{d:D_END,c:S.endAt},
+  ];
+}
+function jump(dir){
+  const M=marks();
+  let cur=0;
+  for(let i=0;i<M.length;i++){
+    const pre = M[i].d < D_END-0.5;
+    if(leaderD > M[i].d-0.5 && (pre || clock > M[i].c-0.05)) cur=i;
+  }
+  let tgt=Math.max(0,Math.min(M.length-1,cur+dir));
+  leaderD=M[tgt].d; clock=M[tgt].c; lastPhase=-1;
+  if(leaderD<D_EXIT) trailEl.setAttribute("d","");
+  render();
+}
+document.getElementById("btnNext").onclick=()=>jump(+1);
+document.getElementById("btnPrev").onclick=()=>jump(-1);
+
+/* ================= PĘTLA ================= */
+let lastT=performance.now();
+function tick(now){
+  const dt=Math.min(0.05,(now-lastT)/1000); lastT=now;
+  if(playing){
+    if(leaderD<D_END){
+      leaderD=Math.min(D_END, leaderD+SPEED_UPS*speed*dt);
+      if(leaderD>=D_END) clock=0;
+    }else{
+      clock+=dt*speed;
+    }
+  }
+  render();
+  requestAnimationFrame(tick);
+}
+
+/* reduced motion → tryb krokowy */
+if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){
+  playing=false;
+}
+render(); setPlayBtn();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
