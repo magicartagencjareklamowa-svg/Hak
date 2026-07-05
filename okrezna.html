@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Obrona okrężna 360° — PZpR — sekcja WOT</title>
+<style>
+  :root{
+    --paper:#EAE4CF; --contour:#CDBD92; --forest:#AFC49B; --road:#D8C9A6; --roadedge:#8A7C5A;
+    --ink:#23281E; --friendly:#1E4D2B; --trail:#B03A2E; --alert:#E03616;
+    --panel:#3E4A30; --panel-ink:#EDE7D3; --panel-dim:#B8B49A;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--panel); color:var(--panel-ink);
+    font-family:'Courier New',Courier,monospace;
+    display:flex; flex-direction:column; overflow:hidden; height:100dvh;
+  }
+  header{padding:8px 12px 6px; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+    border-bottom:1px solid rgba(237,231,207,.25);}
+  header h1{font-family:'Arial Narrow',Arial,sans-serif; font-weight:900; text-transform:uppercase;
+    letter-spacing:.14em; font-size:17px;}
+  header .sub{font-size:11px; color:var(--panel-dim); letter-spacing:.06em}
+  #mapwrap{flex:1; min-height:0; display:flex; justify-content:center; background:var(--panel); position:relative}
+  svg{height:100%; width:100%; display:block}
+
+  #phasebar{display:flex; align-items:center; gap:8px; padding:7px 12px;
+    border-top:1px solid rgba(237,231,207,.25);}
+  #phasenum{font-family:'Arial Narrow',Arial,sans-serif; font-weight:900; font-size:15px;
+    background:var(--panel-ink); color:var(--panel); padding:2px 7px; letter-spacing:.08em; white-space:nowrap;}
+  #phasename{font-family:'Arial Narrow',Arial,sans-serif; font-weight:900; text-transform:uppercase;
+    letter-spacing:.1em; font-size:14px; white-space:nowrap;}
+  #phasedesc{padding:0 12px 8px; font-size:12px; line-height:1.45; color:var(--panel-dim); min-height:36px;}
+  #phasedesc b{color:var(--panel-ink)}
+
+  #controls{display:flex; gap:8px; padding:0 12px 10px; align-items:stretch;}
+  button{font-family:'Courier New',monospace; font-weight:700; font-size:14px;
+    background:transparent; color:var(--panel-ink); border:1.5px solid var(--panel-ink);
+    padding:9px 0; flex:1; cursor:pointer; letter-spacing:.05em;}
+  button:active{background:var(--panel-ink); color:var(--panel)}
+  button.primary{background:var(--panel-ink); color:var(--panel)}
+  button:disabled{opacity:.35}
+  #row2{display:flex; gap:8px; padding:0 12px 12px}
+  #row2 button{font-size:12px; padding:8px 0}
+  #btnErr{border-color:#E8A199; color:#E8A199}
+  #btnErr.on{background:var(--alert); border-color:var(--alert); color:#fff}
+
+  #legend,#opis{position:absolute; inset:0; background:rgba(35,40,30,.93); display:none;
+    padding:18px 16px; overflow-y:auto; z-index:20;}
+  #legend.show,#opis.show{display:block}
+  #legend h2,#opis h2{font-family:'Arial Narrow',Arial,sans-serif; text-transform:uppercase;
+    letter-spacing:.12em; font-size:15px; margin-bottom:12px; color:var(--panel-ink);}
+  #opis h3{font-family:'Arial Narrow',Arial,sans-serif; text-transform:uppercase; letter-spacing:.1em;
+    font-size:13px; margin:14px 0 5px; color:var(--panel-ink);}
+  #opis p,#opis li{font-size:12.5px; line-height:1.55; color:var(--panel-dim)}
+  #opis b{color:var(--panel-ink)}
+  #opis ol,#opis ul{padding-left:18px}
+  #opis li{margin-bottom:4px}
+  #legend table{width:100%; border-collapse:collapse; font-size:12.5px}
+  #legend td{padding:5px 6px; border-bottom:1px solid rgba(237,231,207,.15); color:var(--panel-dim)}
+  #legend td:first-child{color:var(--panel-ink); font-weight:700; width:34px}
+  #legend td:nth-child(2){color:var(--panel-ink); width:52px}
+  #legend .sekt{font-size:11px}
+  #legend .close,#opis .close{margin-top:14px; width:100%}
+  #legend .note,#opis .note{font-size:11px; color:var(--panel-dim); margin-top:12px; line-height:1.5}
+
+  #alertbox{position:absolute; top:14%; left:50%; transform:translateX(-50%);
+    background:var(--alert); color:#fff; font-family:'Arial Narrow',Arial,sans-serif;
+    font-weight:900; text-transform:uppercase; letter-spacing:.1em; font-size:15px;
+    padding:10px 16px; display:none; z-index:15; box-shadow:0 4px 18px rgba(0,0,0,.45);
+    animation:shake .5s infinite; text-align:center;}
+  #alertbox.show{display:block}
+  #okbox{position:absolute; top:14%; left:50%; transform:translateX(-50%);
+    background:#2C6B3F; color:#fff; font-family:'Arial Narrow',Arial,sans-serif;
+    font-weight:900; text-transform:uppercase; letter-spacing:.1em; font-size:15px;
+    padding:9px 16px; display:none; z-index:15;}
+  #okbox.show{display:block}
+  @keyframes shake{0%,100%{transform:translateX(-50%) rotate(0)}
+    25%{transform:translateX(-51%) rotate(-1deg)}75%{transform:translateX(-49%) rotate(1deg)}}
+  #card{position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
+    background:var(--panel-ink); color:var(--panel); font-size:12.5px; font-weight:700;
+    padding:7px 14px; display:none; z-index:15; white-space:nowrap;}
+  #card.show{display:block}
+  @media (prefers-reduced-motion: reduce){ #alertbox{animation:none} }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Obrona okrężna 360°</h1>
+  <span class="sub">PZpR · SEKCJA SLP · 12 ŻOŁN.</span>
+</header>
+
+<div id="mapwrap">
+  <svg id="map" viewBox="0 0 1000 1200" preserveAspectRatio="xMidYMid meet" aria-label="Szkic obrony okrężnej"></svg>
+
+  <div id="legend">
+    <h2>Skład sekcji — sektory (tarcza zegara)</h2>
+    <table id="legtable"></table>
+    <div class="note">
+      Układ wg ustaleń jednostki: <b>środek okręgu — Dowódca + st. radiotelefonista</b>
+      (dowodzenie i łączność). Na <b>godz. 6 para: saper + st. medyk</b> —
+      przy opuszczaniu punktu <b>saper wychodzi pierwszy</b> (toruje),
+      <b>st. medyk ostatni — zamyka</b> i zabiera sygnałówkę.<br><br>
+      Wejście na punkt <b>wyłącznie od godz. 6</b> (od sygnałówki), po wymianie
+      <b>HASŁO → ODZEW</b>. Do stanowiska idziemy <b>wewnątrz okręgu, za plecami</b> —
+      nigdy przez sektory ognia.
+    </div>
+    <button class="close" onclick="toggleLegend()">ZAMKNIJ</button>
+  </div>
+
+  <div id="opis">
+    <h2>Obrona okrężna 360° — opis (PZpR)</h2>
+
+    <h3>Cel</h3>
+    <p>Punkt Zbiórki po Rozproszeniu: bezpieczne odtworzenie sekcji po rozproszeniu
+    (kontakt, zasadzka, utrata łączności). Okrąg daje ochronę w pełnych 360° od
+    pierwszej minuty, a kolejni żołnierze domykają go bez zamieszania.</p>
+
+    <h3>Elementy punktu</h3>
+    <ul>
+      <li><b>Sygnałówka</b> — naturalny, łatwy do rozpoznania znak wystawiony przez
+      pierwszego żołnierza; „aktywuje" punkt i wyznacza kierunek wejścia.</li>
+      <li><b>Hasło i odzew</b> — „zapytanie" podaje żołnierz będący już na punkcie,
+      „odzew" podchodzący (np. ORZEŁ → BIAŁY).</li>
+      <li><b>Godzina 6</b> — jedyny kierunek wejścia na punkt.</li>
+    </ul>
+
+    <h3>Zasady zachowania na PZpR</h3>
+    <ol>
+      <li>Po dotarciu w rejon: <b>obserwacja i nasłuch</b>, aż masz pewność, że jest bezpiecznie.</li>
+      <li>Pierwszy żołnierz „aktywuje" punkt — wystawia sygnałówkę i <b>zabezpiecza od godz. 6</b>.</li>
+      <li>Każdy wchodzący czeka na HASŁO i podaje ODZEW; pokazuje sygnał rozpoznania dalszego.</li>
+      <li>Po wejściu uzupełnia ochronę 360° — zajmuje kolejny główny kierunek.</li>
+      <li>Po wejściu w okrężną podaje <b>meldunek SAS</b> (Stan medyczny, Amunicyjny, Sprzętowy)
+      do dowodzącego w danym momencie (wg ustalonej hierarchii).</li>
+      <li>Po odtworzeniu zdolności (amunicja, odpoczynek) — gotowość do zadania:
+      wymarsz, wsparcie ogniowe, opatrywanie rannych.</li>
+    </ol>
+
+    <h3>Ustawienie i wyjście</h3>
+    <ul>
+      <li><b>Środek okręgu:</b> Dowódca + st. radiotelefonista — dowodzenie i łączność, bez sektora zewnętrznego.</li>
+      <li><b>Godz. 6 (wejście/wyjście):</b> para saper + st. medyk.</li>
+      <li>Przy opuszczaniu punktu: <b>saper wychodzi pierwszy</b> (toruje drogę),
+      kolejno reszta, <b>st. medyk ostatni — zamyka</b> szyk i zabiera sygnałówkę.</li>
+    </ul>
+
+    <h3>Bezpieczeństwo</h3>
+    <ul>
+      <li>Do swojego sektora idziesz <b>środkiem okręgu, za plecami kolegów</b> — sektory ognia są na zewnątrz.</li>
+      <li>Wejście z innego kierunku niż godz. 6 = ryzyko ostrzelania przez własnych.</li>
+      <li>Opuszczając PZpR — <b>zabierz sygnałówkę</b>.</li>
+    </ul>
+
+    <p class="note">Opracowano na podstawie „Poradnika żołnierza WOT" (rozdz. 5, PZpR),
+    układ sekcji wg ustaleń jednostki.</p>
+
+    <button class="close" onclick="toggleOpis()">ZAMKNIJ</button>
+  </div>
+
+  <div id="alertbox">⚠ WEJŚCIE TYLKO OD GODZ. 6<br>+ HASŁO / ODZEW!</div>
+  <div id="okbox">✓ GODZ. 6 → HASŁO → ZA PLECAMI</div>
+  <div id="card"></div>
+</div>
+
+<div id="phasebar">
+  <span id="phasenum">PKT 1</span>
+  <span id="phasename">Rejon PZpR</span>
+</div>
+<div id="phasedesc">Pierwszy żołnierz podchodzi: obserwacja i nasłuch.</div>
+
+<div id="controls">
+  <button id="btnRst" title="od nowa">⟲</button>
+  <button id="btnPrev" title="poprzedni punkt">⏮</button>
+  <button id="btnPlay" class="primary">▶ START</button>
+  <button id="btnNext" title="następny punkt">⏭</button>
+  <button id="btnSpd">×1</button>
+</div>
+<div id="row2">
+  <button id="btnOpis">OPIS</button>
+  <button id="btnLeg">LEGENDA</button>
+  <button id="btnErr" disabled>⚠ POKAŻ BŁĄD</button>
+</div>
+
+<script>
+"use strict";
+/* ================= DANE ================= */
+/* kolejność przybycia = szyk jednostki.
+   Środek: Dowódca + st. radiotelefonista. Godz. 6: saper (wychodzi pierwszy)
+   i st. medyk (zamyka — wychodzi ostatni). Reszta na obwodzie. */
+const CX=500, CY=620, R=170;           /* okrąg */
+const EX=CX, EY=CY+R;                   /* wejście: godz. 6 */
+const LANE=478;                         /* korytarz podejścia */
+function P(a){const r=a*Math.PI/180;return {x:CX+Math.sin(r)*R, y:CY-Math.cos(r)*R, ang:a, cone:1};}
+const SLOT=[
+  {x:CX-22,y:CY+R-3,ang:187,cone:1,sekt:"godz. 6 — przy wyjściu PIERWSZY"},   /* 1 SAP  */
+  {...P(20),  sekt:"obwód, ~godz. 1"},                                         /* 2 SW   */
+  {...P(100), sekt:"obwód, ~godz. 3"},                                         /* 3 CEL  */
+  {...P(260), sekt:"obwód, ~godz. 9"},                                         /* 4 RTF  */
+  {...P(340), sekt:"obwód, ~godz. 11"},                                        /* 5 ZD   */
+  {...P(140), sekt:"obwód, ~godz. 5"},                                         /* 6 RAT  */
+  {...P(220), sekt:"obwód, ~godz. 7"},                                         /* 7 SAP  */
+  {...P(60),  sekt:"obwód, ~godz. 2"},                                         /* 8 SW   */
+  {...P(300), sekt:"obwód, ~godz. 10"},                                        /* 9 CEL  */
+  {x:CX+20,y:CY+2,ang:0,cone:0,sekt:"ŚRODEK — łączność"},                      /* 10 RTF */
+  {x:CX-20,y:CY+2,ang:0,cone:0,sekt:"ŚRODEK — dowodzenie"},                    /* 11 D   */
+  {x:CX+22,y:CY+R-3,ang:173,cone:1,sekt:"godz. 6 — ZAMYKA, wychodzi ostatni"}, /* 12 RAT */
+];
+const ROLES = [
+  {n:1, kod:"SAP", nazwa:"Saper (ALFA)"},
+  {n:2, kod:"SW",  nazwa:"Nawigator — mł. strz. wyborowy"},
+  {n:3, kod:"CEL", nazwa:"Mł. celowniczy"},
+  {n:4, kod:"RTF", nazwa:"Mł. radiotelefonista"},
+  {n:5, kod:"ZD",  nazwa:"Z-ca dowódcy"},
+  {n:6, kod:"RAT", nazwa:"Mł. medyk"},
+  {n:7, kod:"SAP", nazwa:"St. saper (BETA)"},
+  {n:8, kod:"SW",  nazwa:"Nawigator — st. strz. wyborowy"},
+  {n:9, kod:"CEL", nazwa:"St. celowniczy"},
+  {n:10,kod:"RTF", nazwa:"St. radiotelefonista"},
+  {n:11,kod:"D",   nazwa:"Dowódca"},
+  {n:12,kod:"RAT", nazwa:"St. medyk"},
+];
+function hourAngle(h){return h*30;}     /* tylko do tarczy godzin */
+function hourPos(h){
+  const a=hourAngle(h)*Math.PI/180;
+  return {x:CX+Math.sin(a)*R, y:CY-Math.cos(a)*R, ang:hourAngle(h)%360};
+}
+
+/* harmonogram (sekundy) */
+const T_ARR1=2.2, T_OBS=2.0, T_SGN=0.8;          /* żołn.1: podejście, nasłuch, zajęcie g.6 */
+const T0=T_ARR1+T_OBS+T_SGN;                      /* =5.0 start kolejnych */
+const GAP=1.6, T_WALK=1.6, T_BUB=0.5, T_IN=1.2;   /* podejście, hasło, wejście do sektora */
+function sStart(i){return i===0?0:T0+(i-1)*GAP;}
+function sPlaced(i){return i===0?T0:sStart(i)+T_WALK+T_BUB+T_IN;}
+const T_ALL=sPlaced(11);                          /* wszyscy na okręgu */
+const T_SAS=T_ALL+3.2, T_END=T_SAS;               /* meldunek SAS → koniec */
+const T_HALF=sStart(6);                           /* ~połowa: domykanie */
+
+const PHASES = [
+  {num:"PKT 1", name:"Rejon PZpR — nasłuch",
+   desc:'Pierwszy żołnierz podchodzi od godz. 6: <b>obserwacja i nasłuch</b>, aż jest pewność, że rejon bezpieczny.'},
+  {num:"PKT 2", name:"Aktywacja — sygnałówka",
+   desc:'Pierwszy wystawia <b>sygnałówkę</b> (wyznacza kierunek wejścia) i <b>zabezpiecza od godz. 6</b>.'},
+  {num:"PKT 3", name:"Wejście: HASŁO → ODZEW",
+   desc:'Każdy kolejny wchodzi <b>tylko od godz. 6</b>: czeka na HASŁO („ORZEŁ?"), podaje ODZEW („BIAŁY!").'},
+  {num:"PKT 4", name:"Domykanie okręgu 360°",
+   desc:'Wchodzący zajmują kolejne <b>główne kierunki</b> na przemian. Do sektora — <b>środkiem, za plecami</b>.'},
+  {num:"PKT 5", name:"Meldunek SAS",
+   desc:'Po wejściu w okrężną: <b>S</b>tan medyczny, <b>A</b>municyjny, <b>S</b>przętowy — do dowodzącego.'},
+  {num:"KONIEC", name:"Gotowość",
+   desc:'Okrąg pełny, SAS złożony → odtwarzanie zdolności i <b>gotowość do zadania</b>. ⟲ aby powtórzyć.'},
+];
+
+/* ================= SVG ================= */
+const NS="http://www.w3.org/2000/svg";
+const svg=document.getElementById("map");
+function el(tag,attrs,parent){
+  const e=document.createElementNS(NS,tag);
+  for(const k in attrs) e.setAttribute(k,attrs[k]);
+  (parent||svg).appendChild(e); return e;
+}
+el("rect",{x:0,y:0,width:1000,height:1200,fill:"var(--paper)"});
+const deko=el("g",{});
+for(let x=0;x<=1000;x+=100) el("line",{x1:x,y1:0,x2:x,y2:1200,stroke:"var(--contour)","stroke-width":.7,opacity:.55},deko);
+for(let y=0;y<=1200;y+=100) el("line",{x1:0,y1:y,x2:1000,y2:y,stroke:"var(--contour)","stroke-width":.7,opacity:.55},deko);
+/* las dookoła + polana (PZpR w gęstwinie) */
+el("rect",{x:0,y:0,width:1000,height:1200,fill:"var(--forest)",opacity:.55},deko);
+el("ellipse",{cx:CX,cy:CY,rx:R+120,ry:R+120,fill:"var(--paper)"},deko);
+el("ellipse",{cx:CX,cy:CY,rx:R+120,ry:R+120,fill:"none",stroke:"#7E9970","stroke-width":2.5},deko);
+/* przecinka podejścia od południa */
+el("rect",{x:LANE-26,y:CY+R+60,width:64,height:1200-(CY+R+60),fill:"var(--paper)",opacity:.9},deko);
+el("line",{x1:LANE-26,y1:CY+R+60,x2:LANE-26,y2:1200,stroke:"#7E9970","stroke-width":2},deko);
+el("line",{x1:LANE+38,y1:CY+R+60,x2:LANE+38,y2:1200,stroke:"#7E9970","stroke-width":2},deko);
+const tl=el("text",{x:120,y:180,fill:"#5F7A54","font-size":26,"font-weight":"bold","font-family":"Arial Narrow","letter-spacing":"6"},deko);
+tl.textContent="L A S";
+/* okrąg pomocniczy + tarcza godzin */
+el("circle",{cx:CX,cy:CY,r:R,fill:"none",stroke:"var(--ink)","stroke-width":1.4,"stroke-dasharray":"6 10",opacity:.5},deko);
+for(let h=1;h<=12;h++){
+  const p=hourPos(h), a=hourAngle(h)*Math.PI/180;
+  const tx=CX+Math.sin(a)*(R+34), ty=CY-Math.cos(a)*(R+34);
+  const t=el("text",{x:tx,y:ty+6,"text-anchor":"middle",fill:"var(--ink)","font-size":17,
+    "font-family":"Courier New",opacity:.6},deko);
+  t.textContent=h;
+}
+/* róża północy */
+el("path",{d:"M930,70 l-10,34 10,-10 10,10 z",fill:"var(--ink)"},deko);
+const tn=el("text",{x:922,y:126,fill:"var(--ink)","font-size":24,"font-weight":"bold","font-family":"Arial Narrow"},deko);
+tn.textContent="N";
+/* skala */
+el("line",{x1:60,y1:1150,x2:220,y2:1150,stroke:"var(--ink)","stroke-width":3},deko);
+el("line",{x1:60,y1:1142,x2:60,y2:1158,stroke:"var(--ink)","stroke-width":3},deko);
+el("line",{x1:220,y1:1142,x2:220,y2:1158,stroke:"var(--ink)","stroke-width":3},deko);
+const ts=el("text",{x:96,y:1136,fill:"var(--ink)","font-size":17,"font-family":"Courier New"},deko);
+ts.textContent="0——50 m";
+/* strzałka kierunku wejścia */
+el("path",{d:`M${LANE},1080 l-13,26 h26 z`,fill:"var(--ink)",opacity:.7},deko);
+const tw=el("text",{x:LANE+40,y:1098,fill:"var(--ink)","font-size":18,"font-family":"Courier New",opacity:.75},deko);
+tw.textContent="WEJŚCIE (godz. 6)";
+
+/* sygnałówka (pojawia się w PKT2) */
+const sgn=el("g",{opacity:0});
+el("line",{x1:EX+44,y1:EY+56,x2:EX+64,y2:EY+22,stroke:"#6B4A2B","stroke-width":5,"stroke-linecap":"round"},sgn);
+el("line",{x1:EX+64,y1:EY+56,x2:EX+44,y2:EY+22,stroke:"#6B4A2B","stroke-width":5,"stroke-linecap":"round"},sgn);
+const tsg=el("text",{x:EX+80,y:EY+46,fill:"#6B4A2B","font-size":17,"font-weight":"bold","font-family":"Courier New"},sgn);
+tsg.textContent="sygnałówka";
+
+/* dymek hasła */
+const bub=el("g",{opacity:0});
+el("rect",{x:LANE-160,y:EY+64,width:150,height:56,rx:8,fill:"var(--panel-ink)",stroke:"var(--ink)","stroke-width":1.5},bub);
+const tb1=el("text",{x:LANE-85,y:EY+87,"text-anchor":"middle",fill:"var(--panel)","font-size":16,"font-weight":"bold","font-family":"Courier New"},bub);
+tb1.textContent="„ORZEŁ?”";
+const tb2=el("text",{x:LANE-85,y:EY+109,"text-anchor":"middle",fill:"#2C6B3F","font-size":16,"font-weight":"bold","font-family":"Courier New"},bub);
+tb2.textContent="„BIAŁY!”";
+
+/* warstwy */
+const coneLayer=el("g",{});
+const soldierLayer=el("g",{});
+const fxLayer=el("g",{});
+
+/* stożki (na zewnątrz okręgu) */
+function conePath(len,half){
+  const a1=-half*Math.PI/180, a2=half*Math.PI/180;
+  const p=(a)=>[Math.sin(a)*len,-Math.cos(a)*len];
+  const [x1,y1]=p(a1),[x2,y2]=p(a2);
+  return `M0,0 L${x1},${y1} A${len},${len} 0 0 1 ${x2},${y2} Z`;
+}
+const cones = ROLES.map(()=>{
+  const g=el("g",{opacity:0},coneLayer);
+  const c=el("path",{d:conePath(160,17),fill:"rgba(192,57,43,.22)",stroke:"rgba(176,58,46,.55)","stroke-width":1.2},g);
+  return {g,c,flash:false};
+});
+
+/* żołnierze */
+const soldiers = ROLES.map((r,i)=>{
+  const g=el("g",{cursor:"pointer",opacity:0},soldierLayer);
+  const weapon=el("line",{x1:0,y1:0,x2:0,y2:-19,stroke:"var(--ink)","stroke-width":3.5,"stroke-linecap":"round"},g);
+  el("circle",{cx:0,cy:0,r:12,fill:"var(--friendly)",stroke:"var(--paper)","stroke-width":2},g);
+  const num=el("text",{x:0,y:4.5,fill:"#fff","font-size":13,"font-weight":"bold","text-anchor":"middle","font-family":"Arial"},g);
+  num.textContent=r.n;
+  const lab=el("text",{x:16,y:5,fill:"var(--ink)","font-size":15,"font-weight":"bold","font-family":"Courier New"},g);
+  lab.textContent=r.kod;
+  g.addEventListener("pointerdown",()=>showCard(i));
+  return {g,weapon,lab,x:0,y:0};
+});
+/* intruz (demo błędu) */
+const ghost=(()=> {
+  const g=el("g",{opacity:0},soldierLayer);
+  el("circle",{cx:0,cy:0,r:12,fill:"#8A8A7A",stroke:"var(--paper)","stroke-width":2},g);
+  const t=el("text",{x:0,y:4.5,fill:"#fff","font-size":13,"font-weight":"bold","text-anchor":"middle","font-family":"Arial"},g);
+  t.textContent="X";
+  return g;
+})();
+
+function place(i,x,y,ang){
+  const s=soldiers[i]; s.x=x;s.y=y;
+  s.g.setAttribute("transform",`translate(${x},${y})`);
+  s.weapon.setAttribute("transform",`rotate(${ang})`);
+  const west = x<CX;
+  s.lab.setAttribute("x", west?-16:16);
+  s.lab.setAttribute("text-anchor", west?"end":"start");
+}
+function lerp(a,b,t){return a+(b-a)*t;}
+function ease(t){t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);}
+
+/* trasa i-tego: spawn → punkt hasła → wewnątrz → stanowisko */
+function soldierState(i,t){
+  const slot=SLOT[i];
+  const start=sStart(i);
+  if(t<start) return null;
+  if(i===0){
+    if(t<T_ARR1){const u=ease(t/T_ARR1);return {x:LANE,y:lerp(1160,EY+70,u),ang:0,cone:0};}
+    if(t<T_ARR1+T_OBS) return {x:LANE,y:EY+70,ang:0,cone:0,listen:true};       /* nasłuch */
+    if(t<T0){const u=ease((t-T_ARR1-T_OBS)/T_SGN);
+      return {x:lerp(LANE,slot.x,u),y:lerp(EY+70,slot.y,u),ang:slot.ang,cone:0};}
+    return {x:slot.x,y:slot.y,ang:slot.ang,cone:slot.cone};
+  }
+  const t1=start+T_WALK, t2=t1+T_BUB, t3=t2+T_IN;
+  if(t<t1){const u=ease((t-start)/T_WALK);return {x:LANE,y:lerp(1160,EY+70,u),ang:0,cone:0};}
+  if(t<t2) return {x:LANE,y:EY+70,ang:0,cone:0,bubble:true};
+  if(t<t3){
+    const u=ease((t-t2)/T_IN);
+    const dx=slot.x-CX, dy=slot.y-CY, d=Math.hypot(dx,dy);
+    if(d<R*0.45){ /* środek: prosto od wejścia */
+      return {x:lerp(LANE,slot.x,u),y:lerp(EY+40,slot.y,u),ang:slot.ang,cone:0};
+    }
+    const inA={x:CX+dx/d*R*0.35, y:CY+dy/d*R*0.35};
+    if(u<0.5){const v=u/0.5;return {x:lerp(LANE,inA.x,v),y:lerp(EY+40,inA.y,v),ang:slot.ang,cone:0};}
+    const v=(u-0.5)/0.5;return {x:lerp(inA.x,slot.x,v),y:lerp(inA.y,slot.y,v),ang:slot.ang,cone:0};
+  }
+  return {x:slot.x,y:slot.y,ang:slot.ang,cone:slot.cone};
+}
+
+/* ================= STAN ================= */
+let t=0, playing=false, speed=1; const speeds=[1,2,0.5]; let spdI=0;
+let err=null; /* {e} tryb błędu */
+const alertbox=document.getElementById("alertbox"), okbox=document.getElementById("okbox");
+
+function render(){
+  /* sygnałówka */
+  sgn.setAttribute("opacity", t>=T_ARR1+T_OBS ? 1 : 0);
+  /* żołnierze + stożki */
+  let bubbleOn=false, placedCnt=0;
+  soldiers.forEach((s,i)=>{
+    const st=soldierState(i,t);
+    if(!st){s.g.setAttribute("opacity",0);cones[i].g.setAttribute("opacity",0);return;}
+    s.g.setAttribute("opacity",1);
+    place(i,st.x,st.y,st.ang);
+    if(st.bubble) bubbleOn=true;
+    const c=cones[i];
+    c.g.setAttribute("transform",`translate(${st.x},${st.y}) rotate(${st.ang})`);
+    c.g.setAttribute("opacity", st.cone);
+    c.c.setAttribute("fill", c.flash?"rgba(224,54,22,.55)":"rgba(192,57,43,.22)");
+    c.c.setAttribute("stroke", c.flash?"var(--alert)":"rgba(176,58,46,.55)");
+    if(st.cone) placedCnt++;
+  });
+  bub.setAttribute("opacity", bubbleOn?1:0);
+  /* nasłuch żołnierza 1 / SAS pulsy */
+  fxLayer.innerHTML="";
+  const s0=soldierState(0,t);
+  if(s0&&s0.listen){
+    const u=(t%1.2)/1.2;
+    el("circle",{cx:LANE,cy:EY+70,r:18+u*80,fill:"none",stroke:"var(--friendly)","stroke-width":2,opacity:(1-u)*.6},fxLayer);
+  }
+  if(t>=T_ALL&&t<T_SAS&&!err){
+    const dp=SLOT[10]; /* dowódca w środku */
+    const u=((t-T_ALL)%1.1)/1.1;
+    el("circle",{cx:dp.x,cy:dp.y,r:16+u*60,fill:"none",stroke:"var(--trail)","stroke-width":2.5,opacity:(1-u)*.7},fxLayer);
+    const tt=el("text",{x:CX,y:CY-R-56,"text-anchor":"middle",fill:"var(--trail)","font-size":30,"font-weight":"bold","font-family":"Courier New"},fxLayer);
+    tt.textContent="MELDUNEK  S·A·S";
+  }
+  /* tryb błędu */
+  cones.forEach(c=>c.flash=false);
+  alertbox.classList.remove("show"); okbox.classList.remove("show");
+  ghost.setAttribute("opacity",0);
+  if(err){
+    const e=err.e;
+    if(e<2.2){ /* intruz z godz. 2 na wprost */
+      const u=ease(e/2.2);
+      const gx=lerp(830,CX+Math.sin(60*Math.PI/180)*R*0.7,u);
+      const gy=lerp(330,CY-Math.cos(60*Math.PI/180)*R*0.7,u);
+      ghost.setAttribute("opacity",1);
+      ghost.setAttribute("transform",`translate(${gx},${gy})`);
+      if(u>0.45){
+        [1,7,2,4].forEach(ix=>cones[ix].flash=true); /* obwód płn-wsch: g.1, g.2, g.3, g.11 */
+        alertbox.classList.add("show");
+      }
+    }else if(e<3.4){ ghost.setAttribute("opacity",1);
+      ghost.setAttribute("transform",`translate(${CX+Math.sin(60*Math.PI/180)*R*0.7},${CY-Math.cos(60*Math.PI/180)*R*0.7})`);
+      [1,7,2,4].forEach(ix=>cones[ix].flash=true);
+      alertbox.classList.add("show");
+    }else if(e<5.2){ /* wycofanie */
+      const u=ease((e-3.4)/1.8);
+      const gx=lerp(CX+Math.sin(60*Math.PI/180)*R*0.7,830,u);
+      const gy=lerp(CY-Math.cos(60*Math.PI/180)*R*0.7,330,u);
+      ghost.setAttribute("opacity",1-u*0.3);
+      ghost.setAttribute("transform",`translate(${gx},${gy})`);
+    }else if(e<7.4){ /* poprawnie: od południa */
+      okbox.classList.add("show");
+      const u=ease((e-5.2)/2.2);
+      ghost.setAttribute("opacity",1);
+      ghost.setAttribute("transform",`translate(${LANE},${lerp(1160,EY+70,u)})`);
+      if(u>0.9) bub.setAttribute("opacity",1);
+    }else if(e<8.6){ okbox.classList.add("show");
+      bub.setAttribute("opacity",1);
+      ghost.setAttribute("transform",`translate(${LANE},${EY+70})`);
+      ghost.setAttribute("opacity",1);
+    }else{ err=null; }
+  }
+  /* faza */
+  let ph;
+  if(err) ph=3;
+  else if(t<T_ARR1+T_OBS) ph=0;
+  else if(t<T0) ph=1;
+  else if(t<T_HALF) ph=2;
+  else if(t<T_ALL) ph=3;
+  else if(t<T_SAS) ph=4;
+  else {ph=5; if(playing){playing=false;setPlayBtn();}}
+  setPhase(ph);
+}
+
+/* ================= UI ================= */
+const elNum=document.getElementById("phasenum"), elName=document.getElementById("phasename"),
+      elDesc=document.getElementById("phasedesc"), btnPlay=document.getElementById("btnPlay"),
+      btnErr=document.getElementById("btnErr"), card=document.getElementById("card");
+let lastPhase=-1;
+function setPhase(i){
+  if(i===lastPhase) return; lastPhase=i;
+  elNum.textContent=PHASES[i].num; elName.textContent=PHASES[i].name;
+  elDesc.innerHTML=PHASES[i].desc;
+  btnErr.disabled = t<T0;
+}
+function setPlayBtn(){btnPlay.textContent=playing?"⏸ PAUZA":"▶ START";btnPlay.classList.toggle("primary",!playing);}
+let cardT=null;
+function showCard(i){
+  card.textContent=`${ROLES[i].n} · ${ROLES[i].nazwa} — ${SLOT[i].sekt}`;
+  card.classList.add("show");
+  clearTimeout(cardT); cardT=setTimeout(()=>card.classList.remove("show"),2600);
+}
+function toggleLegend(){document.getElementById("legend").classList.toggle("show");}
+function toggleOpis(){document.getElementById("opis").classList.toggle("show");}
+document.getElementById("btnLeg").onclick=toggleLegend;
+document.getElementById("btnOpis").onclick=toggleOpis;
+const legtable=document.getElementById("legtable");
+ROLES.forEach((r,i)=>{
+  const tr=document.createElement("tr");
+  tr.innerHTML=`<td>${r.n}</td><td>${r.kod}</td><td>${r.nazwa}</td><td class="sekt">${SLOT[i].sekt}</td>`;
+  legtable.appendChild(tr);
+});
+btnPlay.onclick=()=>{playing=!playing;setPlayBtn();};
+document.getElementById("btnRst").onclick=()=>{
+  t=0; err=null; btnErr.classList.remove("on"); playing=false; setPlayBtn(); lastPhase=-1; render();
+};
+document.getElementById("btnSpd").onclick=(e)=>{spdI=(spdI+1)%speeds.length;speed=speeds[spdI];e.target.textContent="×"+speed;};
+btnErr.onclick=()=>{ if(t<T0) return; t=Math.max(t,T_ALL); err={e:0}; playing=true; setPlayBtn(); };
+const MARKS=[0, T_ARR1+T_OBS, T0, T_HALF, T_ALL, T_SAS];
+function jump(dir){
+  let cur=0; for(let i=0;i<MARKS.length;i++) if(t>MARKS[i]-0.05) cur=i;
+  const tgt=Math.max(0,Math.min(MARKS.length-1,cur+dir));
+  t=MARKS[tgt]; err=null; lastPhase=-1; render();
+}
+document.getElementById("btnNext").onclick=()=>jump(1);
+document.getElementById("btnPrev").onclick=()=>jump(-1);
+
+/* ================= PĘTLA ================= */
+let lastT=performance.now();
+function tick(now){
+  const dt=Math.min(0.05,(now-lastT)/1000); lastT=now;
+  if(playing){ if(err) err.e+=dt*speed; else t+=dt*speed; }
+  render();
+  requestAnimationFrame(tick);
+}
+if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){playing=false;}
+render(); setPlayBtn();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
