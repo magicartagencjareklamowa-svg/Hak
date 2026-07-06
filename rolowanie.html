@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Rolowanie — zerwanie kontaktu — sekcja WOT</title>
+<style>
+  :root{
+    --paper:#EAE4CF; --contour:#CDBD92; --forest:#AFC49B;
+    --ink:#23281E; --friendly:#1E4D2B; --trail:#B03A2E; --alert:#E03616; --enemy:#8E1F14;
+    --panel:#3E4A30; --panel-ink:#EDE7D3; --panel-dim:#B8B49A;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{background:var(--panel); color:var(--panel-ink);
+    font-family:'Courier New',Courier,monospace;
+    display:flex; flex-direction:column; overflow:hidden; height:100dvh;}
+  header{padding:8px 12px 6px; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+    border-bottom:1px solid rgba(237,231,207,.25);}
+  header h1{font-family:'Arial Narrow',Arial,sans-serif; font-weight:900; text-transform:uppercase;
+    letter-spacing:.14em; font-size:17px;}
+  header .sub{font-size:11px; color:var(--panel-dim); letter-spacing:.06em}
+  #mapwrap{flex:1; min-height:0; display:flex; justify-content:center; position:relative}
+  svg{height:100%; width:100%; display:block}
+
+  #phasebar{display:flex; align-items:center; gap:8px; padding:7px 12px;
+    border-top:1px solid rgba(237,231,207,.25);}
+  #phasenum{font-family:'Arial Narrow',Arial,sans-serif; font-weight:900; font-size:15px;
+    background:var(--panel-ink); color:var(--panel); padding:2px 7px; letter-spacing:.08em; white-space:nowrap;}
+  #phasename{font-family:'Arial Narrow',Arial,sans-serif; font-weight:900; text-transform:uppercase;
+    letter-spacing:.1em; font-size:14px; white-space:nowrap;}
+  #phasedesc{padding:0 12px 8px; font-size:12px; line-height:1.45; color:var(--panel-dim); min-height:36px;}
+  #phasedesc b{color:var(--panel-ink)}
+
+  #controls{display:flex; gap:8px; padding:0 12px 10px;}
+  button{font-family:'Courier New',monospace; font-weight:700; font-size:14px;
+    background:transparent; color:var(--panel-ink); border:1.5px solid var(--panel-ink);
+    padding:9px 0; flex:1; cursor:pointer; letter-spacing:.05em;}
+  button:active{background:var(--panel-ink); color:var(--panel)}
+  button.primary{background:var(--panel-ink); color:var(--panel)}
+  button:disabled{opacity:.35}
+  #row2{display:flex; gap:6px; padding:0 12px 12px}
+  #row2 button{font-size:11px; padding:8px 0}
+  #btnErr{border-color:#E8A199; color:#E8A199}
+  #btnDir{border-color:#C9C27F; color:#E9E2A0}
+
+  #legend,#opis{position:absolute; inset:0; background:rgba(35,40,30,.93); display:none;
+    padding:18px 16px; overflow-y:auto; z-index:20;}
+  #legend.show,#opis.show{display:block}
+  #legend h2,#opis h2{font-family:'Arial Narrow',Arial,sans-serif; text-transform:uppercase;
+    letter-spacing:.12em; font-size:15px; margin-bottom:12px;}
+  #opis h3{font-family:'Arial Narrow',Arial,sans-serif; text-transform:uppercase; letter-spacing:.1em;
+    font-size:13px; margin:14px 0 5px; color:var(--panel-ink);}
+  #opis p,#opis li{font-size:12.5px; line-height:1.55; color:var(--panel-dim)}
+  #opis b{color:var(--panel-ink)}
+  #opis ol,#opis ul{padding-left:18px}
+  #opis li{margin-bottom:4px}
+  #legend table{width:100%; border-collapse:collapse; font-size:12.5px}
+  #legend td{padding:5px 6px; border-bottom:1px solid rgba(237,231,207,.15); color:var(--panel-dim)}
+  #legend td:first-child{color:var(--panel-ink); font-weight:700; width:34px}
+  #legend td:nth-child(2){color:var(--panel-ink); width:52px}
+  #legend .sekt{font-size:11px}
+  #legend .close,#opis .close{margin-top:14px; width:100%}
+  #legend .note,#opis .note{font-size:11px; color:var(--panel-dim); margin-top:12px; line-height:1.5}
+
+  #alertbox{position:absolute; top:12%; left:50%; transform:translateX(-50%);
+    background:var(--alert); color:#fff; font-family:'Arial Narrow',Arial,sans-serif;
+    font-weight:900; text-transform:uppercase; letter-spacing:.1em; font-size:15px;
+    padding:10px 16px; display:none; z-index:15; text-align:center;
+    box-shadow:0 4px 18px rgba(0,0,0,.45); animation:shake .5s infinite;}
+  #alertbox.show{display:block}
+  #okbox{position:absolute; top:12%; left:50%; transform:translateX(-50%);
+    background:#2C6B3F; color:#fff; font-family:'Arial Narrow',Arial,sans-serif;
+    font-weight:900; text-transform:uppercase; letter-spacing:.1em; font-size:15px;
+    padding:9px 16px; display:none; z-index:15;}
+  #okbox.show{display:block}
+  @keyframes shake{0%,100%{transform:translateX(-50%) rotate(0)}
+    25%{transform:translateX(-51%) rotate(-1deg)}75%{transform:translateX(-49%) rotate(1deg)}}
+  #card{position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
+    background:var(--panel-ink); color:var(--panel); font-size:12.5px; font-weight:700;
+    padding:7px 14px; display:none; z-index:15; white-space:nowrap;}
+  #card.show{display:block}
+  @media (prefers-reduced-motion: reduce){ #alertbox{animation:none} }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Rolowanie — zerwanie kontaktu</h1>
+  <span class="sub">JODEŁKA · SEKCJA SLP · 12 ŻOŁN.</span>
+</header>
+
+<div id="mapwrap">
+  <svg id="map" viewBox="0 0 1000 1200" preserveAspectRatio="xMidYMid meet" aria-label="Szkic rolowania"></svg>
+
+  <div id="legend">
+    <h2>Skład sekcji — nitki jodełki i funkcje</h2>
+    <table id="legtable"></table>
+    <div class="note">
+      <b>Rolowanie:</b> skrajny od strony kontaktu oddaje ogień i biegnie
+      <b>zewnętrzną stroną swojej nitki</b> na jej koniec; nitki naprzemiennie.
+      Środkiem nie biegamy — tam jest linia ognia.<br><br>
+      <b>Semafor (ZD):</b> wyznaczony przez dowódcę w trakcie rolowania.
+      Przy swojej kolejce biegnie <b>na wejście do lasu</b> i daje sygnał
+      „SEMAFOR!" — od tej chwili kolejni rolujący <b>wbiegają prosto do lasu</b>.
+      <b>Ostatni odbija: „OSTATNI!"</b> — semafor wchodzi i <b>zabezpiecza wejście</b>.<br><br>
+      <b>W lesie:</b> linia frontem do kierunku kontaktu, <b>środkowy kryje tył</b> —
+      odsunięty za korytarz wejściowy (wbiegający mijają go za plecami,
+      nigdy w linii ognia). <b>Ostatni daje semaforowi sygnał: „OSTATNI!"</b>.
+    </div>
+    <button class="close" onclick="toggleLegend()">ZAMKNIJ</button>
+  </div>
+
+  <div id="opis">
+    <h2>Rolowanie (peel) — opis taktyki</h2>
+
+    <h3>Cel</h3>
+    <p>Zerwanie kontaktu ogniowego z przodu lub z tyłu podczas marszu w jodełce:
+    sekcja utrzymuje ciągły ogień na przeciwnika, jednocześnie „przelewając się"
+    w kierunku przeciwnym do ataku, a następnie schodzi z osi do ukrycia (lasu).</p>
+
+    <h3>Przebieg</h3>
+    <ol>
+      <li>Marsz w <b>jodełce</b> — dwie nitki naprzemiennie, sektory na zewnątrz.</li>
+      <li>Kontakt → okrzyk: <b>„KONTAKT + godzina!"</b> (np. godz. 12 — przód,
+      godz. 6 — tył). Wszyscy w postawę, bronie na kierunek zagrożenia.</li>
+      <li><b>Rolowanie w kierunku przeciwnym do ataku:</b> skrajny od strony
+      kontaktu oddaje ogień → biegnie <b>zewnętrzną stroną nitki</b> na koniec →
+      ogień przejmuje następny. Nitki rolują naprzemiennie.</li>
+      <li>Podczas rolowania <b>dowódca wyznacza SEMAFORA</b> (ZD). Sekcja
+      wchodzi w <b>drugie rolowanie</b>.</li>
+      <li><b>Semafor przy swojej kolejce</b> nie wraca do nitki — biegnie
+      <b>na wejście do lasu</b> i daje sygnał: <b>„SEMAFOR!"</b>.</li>
+      <li>Od sygnału każdy kolejny rolujący <b>wbiega prosto do lasu</b>,
+      mijając semafora. <b>Ostatni odbija go: „OSTATNI!"</b>.</li>
+      <li>W lesie sekcja rozstawia się <b>w linii frontem do kierunku kontaktu</b>;
+      <b>żołnierz w środku ustawia ogień w tył</b> — zabezpiecza plecy. Staje
+      <b>za korytarzem wejściowym</b>, tak by wbiegający przechodzili
+      <b>za jego plecami, nie w linii ognia</b>.</li>
+      <li>Po odbiciu „OSTATNI!" <b>semafor wchodzi i zabezpiecza wejście do lasu</b>.</li>
+    </ol>
+
+    <h3>Bezpieczeństwo</h3>
+    <ul>
+      <li>Rolujemy <b>tylko zewnętrzną stroną własnej nitki</b> — środek to linia ognia.</li>
+      <li>Ogień prowadzi wyłącznie skrajny — nikt nie strzela przez kolegów.</li>
+      <li>Semafor musi być widoczny dla całej sekcji; wchodzi tuż przed zamykającym.</li>
+    </ul>
+
+    <p class="note">Drill wg SOP jednostki (przekazany przez instruktorów) —
+    uzupełnia „Poradnik żołnierza WOT". Układ sekcji wg ustaleń jednostki.</p>
+
+    <button class="close" onclick="toggleOpis()">ZAMKNIJ</button>
+  </div>
+
+  <div id="alertbox">⚠ NIE ŚRODKIEM!<br>ROLUJ ZEWNĘTRZNĄ STRONĄ NITKI!</div>
+  <div id="okbox">✓ ZEWNĘTRZNĄ STRONĄ — TAK</div>
+  <div id="card"></div>
+</div>
+
+<div id="phasebar">
+  <span id="phasenum">PKT 1</span>
+  <span id="phasename">Marsz w jodełce</span>
+</div>
+<div id="phasedesc">Dwie nitki naprzemiennie, sektory na zewnątrz osi marszu.</div>
+
+<div id="controls">
+  <button id="btnRst">⟲</button>
+  <button id="btnPrev">⏮</button>
+  <button id="btnPlay" class="primary">▶ START</button>
+  <button id="btnNext">⏭</button>
+  <button id="btnSpd">×1</button>
+</div>
+<div id="row2">
+  <button id="btnDir">KONTAKT: PRZÓD</button>
+  <button id="btnOpis">OPIS</button>
+  <button id="btnLeg">LEGENDA</button>
+  <button id="btnErr" disabled>⚠ BŁĄD</button>
+</div>
+
+<script>
+"use strict";
+/* ================= DANE ================= */
+const ROLES = [
+  {n:1, kod:"SAP", nazwa:"Saper (ALFA)",                    fun:""},
+  {n:2, kod:"SW",  nazwa:"Nawigator — mł. strz. wyborowy",  fun:""},
+  {n:3, kod:"CEL", nazwa:"Mł. celowniczy",                  fun:""},
+  {n:4, kod:"RTF", nazwa:"Mł. radiotelefonista",            fun:"ostatni w las — odbija: „OSTATNI!”"},
+  {n:5, kod:"ZD",  nazwa:"Z-ca dowódcy",                    fun:"SEMAFOR — sygnał przy swoim rolowaniu, potem zabezpiecza wejście"},
+  {n:6, kod:"RAT", nazwa:"Mł. medyk",                       fun:""},
+  {n:7, kod:"SAP", nazwa:"St. saper (BETA)",                fun:""},
+  {n:8, kod:"SW",  nazwa:"Nawigator — st. strz. wyborowy",  fun:""},
+  {n:9, kod:"CEL", nazwa:"St. celowniczy",                  fun:""},
+  {n:10,kod:"RTF", nazwa:"St. radiotelefonista",            fun:""},
+  {n:11,kod:"D",   nazwa:"Dowódca",                         fun:"rolując wyznacza semafora"},
+  {n:12,kod:"RAT", nazwa:"St. medyk",                       fun:""},
+];
+const SEMAFOR=4, FIRST=0, LAST=11;      /* indeksy: ZD, saper, st. medyk */
+const AXIS=560, OFF=28, LANE_OUT=40;    /* oś, odsunięcie nitek, pas zewnętrzny */
+const STEP=36;                          /* krok w nitce */
+const TREE_X=312;                       /* linia lasu (zachód) */
+
+/* nitki: parzyste indeksy = LEWA, nieparzyste = PRAWA (jodełka) */
+const FILE = i => i%2===0 ? -1 : 1;     /* -1 lewa, +1 prawa */
+const CHAINPOS = i => Math.floor(i/2);  /* pozycja startowa w swojej nitce 0..5 */
+
+/* kierunek kontaktu: 1 = PRZÓD (płn), -1 = TYŁ (płd) */
+let DIR=1;
+function geo(){
+  if(DIR===1) return {Y0:430, sgn:1, enemyY:200, gateY:950};
+  return {Y0:760, sgn:-1, enemyY:1030, gateY:210};
+}
+function chainXY(i,pos){
+  const g=geo();
+  const x=AXIS+FILE(i)*OFF;
+  const y=g.Y0 + g.sgn*(pos*STEP + (FILE(i)>0?STEP/2:0));
+  return {x,y};
+}
+
+/* ================ HARMONOGRAM ================ */
+const T_MARCH=2.0, T_SET=0.7;
+const P_GAP=0.7, P_DUR=1.05, F_DUR=2.0, SEM_DUR=1.5;
+const T_PEEL0=T_MARCH+T_SET;
+function pStart(k){                    /* k=0..27: rolowanie ciągłe */
+  if(k<12) return T_PEEL0+k*P_GAP;     /* 1. rolowanie (pełne) */
+  return T_ROLL2+(k-12)*P_GAP;         /* 2. rolowanie → przechodzi w las */
+}
+const T_END1=T_PEEL0+11*P_GAP+P_DUR;
+const T_ROLL2=T_END1+1.0;
+const T_SEMGO=T_ROLL2+SEMAFOR*P_GAP;   /* kolejka semafora w 2. rolowaniu */
+/* kolejność wbiegania do lasu: po semaforze, z zawinięciem */
+const ORDER=[5,6,7,8,9,10,11,0,1,2,3];
+const LASTIN=3;                        /* mł. radio — ostatni, odbija „OSTATNI!" */
+function divK(i){ return i===SEMAFOR?16 : (i>=5? 12+i : 24+i); }
+const T_ALLIN=pStart(divK(LASTIN))+F_DUR;
+const T_HAND=T_ALLIN+0.2, HAND_DUR=1.0;
+const T_END=T_HAND+HAND_DUR+0.3;
+
+const PHASES=[
+ {num:"PKT 1",name:"Marsz w jodełce",
+  desc:'Dwie nitki naprzemiennie, sektory na zewnątrz osi marszu.'},
+ {num:"PKT 2",name:"KONTAKT!",
+  desc:'Okrzyk: <b>„KONTAKT — GODZ. {G}!"</b>. Postawa, bronie na kierunek zagrożenia. Ogień prowadzi tylko skrajny.'},
+ {num:"PKT 3",name:"1. rolowanie",
+  desc:'Skrajny od strony kontaktu: ogień → bieg <b>zewnętrzną stroną nitki</b> na koniec. Nitki naprzemiennie. <b>Dowódca, rolując, wyznacza semafora (ZD)</b>.'},
+ {num:"PKT 4",name:"2. rolowanie — sygnał SEMAFOR",
+  desc:'Rolowanie trwa. <b>Semafor przy swojej kolejce</b> nie wraca do nitki — biegnie <b>na wejście do lasu</b> i daje sygnał „SEMAFOR!".'},
+ {num:"PKT 5",name:"Rolowanie w las",
+  desc:'Od sygnału każdy kolejny rolujący <b>wbiega prosto do lasu</b> mijając semafora. Linia frontem do kontaktu, <b>środkowy kryje tył</b>. Ostatni odbija: <b>„OSTATNI!"</b>.'},
+ {num:"KONIEC",name:"Linia w lesie",
+  desc:'Po „OSTATNI!" semafor wchodzi i <b>zabezpiecza wejście do lasu</b>. Sekcja w linii, tył kryty. ⟲ / PRZÓD-TYŁ.'},
+];
+
+/* ================= SVG ================= */
+const NS="http://www.w3.org/2000/svg";
+const svg=document.getElementById("map");
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);(p||svg).appendChild(e);return e;}
+el("rect",{x:0,y:0,width:1000,height:1200,fill:"var(--paper)"});
+const deko=el("g",{});
+for(let x=0;x<=1000;x+=100) el("line",{x1:x,y1:0,x2:x,y2:1200,stroke:"var(--contour)","stroke-width":.7,opacity:.55},deko);
+for(let y=0;y<=1200;y+=100) el("line",{x1:0,y1:y,x2:1000,y2:y,stroke:"var(--contour)","stroke-width":.7,opacity:.55},deko);
+/* pas lasu na zachodzie z prostą linią drzew */
+const treePts=[[TREE_X,80],[TREE_X+6,180],[TREE_X-4,290],[TREE_X+4,400],[TREE_X-6,510],[TREE_X+2,620],[TREE_X-4,730],[TREE_X+6,840],[TREE_X-2,950],[TREE_X+4,1060],[TREE_X-4,1150]];
+el("path",{d:"M"+treePts.map(p=>p[0]+","+p[1]).join(" L")+" L0,1150 L0,80 Z",fill:"var(--forest)",opacity:.6},deko);
+el("path",{d:"M"+treePts.map(p=>p[0]+","+p[1]).join(" L"),fill:"none",stroke:"#7E9970","stroke-width":2.5},deko);
+const tl=el("text",{x:110,y:600,fill:"#5F7A54","font-size":26,"font-weight":"bold","font-family":"Arial Narrow","letter-spacing":"6"},deko);
+tl.textContent="L A S";
+/* oś marszu (ścieżka) */
+el("line",{x1:AXIS,y1:0,x2:AXIS,y2:1200,stroke:"var(--ink)","stroke-width":1.6,"stroke-dasharray":"12 14",opacity:.5},deko);
+/* róża + skala */
+el("path",{d:"M930,70 l-10,34 10,-10 10,10 z",fill:"var(--ink)"},deko);
+const tn=el("text",{x:922,y:126,fill:"var(--ink)","font-size":24,"font-weight":"bold","font-family":"Arial Narrow"},deko);
+tn.textContent="N";
+el("line",{x1:60,y1:1150,x2:220,y2:1150,stroke:"var(--ink)","stroke-width":3},deko);
+el("line",{x1:60,y1:1142,x2:60,y2:1158,stroke:"var(--ink)","stroke-width":3},deko);
+el("line",{x1:220,y1:1142,x2:220,y2:1158,stroke:"var(--ink)","stroke-width":3},deko);
+const ts=el("text",{x:96,y:1136,fill:"var(--ink)","font-size":17,"font-family":"Courier New"},deko);
+ts.textContent="0——50 m";
+
+/* przeciwnik */
+const enemyG=el("g",{opacity:0});
+el("path",{d:"M0,-18 L18,0 L0,18 L-18,0 Z",fill:"var(--enemy)"},enemyG);
+const te=el("text",{x:26,y:6,fill:"var(--enemy)","font-size":20,"font-weight":"bold","font-family":"Arial Narrow"},enemyG);
+te.textContent="PRZECIWNIK";
+/* semafor: chorągiewka-strzałka */
+const semG=el("g",{opacity:0});
+el("line",{x1:0,y1:0,x2:-58,y2:0,stroke:"var(--trail)","stroke-width":5,"stroke-linecap":"round"},semG);
+el("path",{d:"M-58,0 l16,-10 v20 z",fill:"var(--trail)"},semG);
+const tsm=el("text",{x:10,y:-16,fill:"var(--trail)","font-size":17,"font-weight":"bold","font-family":"Courier New"},semG);
+tsm.textContent="SEMAFOR";
+
+const fxLayer=el("g",{});
+const soldierLayer=el("g",{});
+
+const soldiers=ROLES.map((r,i)=>{
+  const g=el("g",{cursor:"pointer"},soldierLayer);
+  const weapon=el("line",{x1:0,y1:0,x2:0,y2:-19,stroke:"var(--ink)","stroke-width":3.5,"stroke-linecap":"round"},g);
+  el("circle",{cx:0,cy:0,r:12,fill:"var(--friendly)",stroke:"var(--paper)","stroke-width":2},g);
+  const num=el("text",{x:0,y:4.5,fill:"#fff","font-size":13,"font-weight":"bold","text-anchor":"middle","font-family":"Arial"},g);
+  num.textContent=r.n;
+  const lab=el("text",{x:16,y:5,fill:"var(--ink)","font-size":14,"font-weight":"bold","font-family":"Courier New"},g);
+  lab.textContent=r.kod;
+  g.addEventListener("pointerdown",()=>showCard(i));
+  return {g,weapon,lab,x:0,y:0};
+});
+const ghost=(()=>{const g=el("g",{opacity:0},soldierLayer);
+  el("circle",{cx:0,cy:0,r:12,fill:"#8A8A7A",stroke:"var(--paper)","stroke-width":2},g);
+  const t=el("text",{x:0,y:4.5,fill:"#fff","font-size":13,"font-weight":"bold","text-anchor":"middle","font-family":"Arial"},g);
+  t.textContent="X";return g;})();
+
+function place(i,x,y,ang){
+  const s=soldiers[i]; s.x=x;s.y=y;
+  s.g.setAttribute("transform",`translate(${x},${y})`);
+  s.weapon.setAttribute("transform",`rotate(${ang})`);
+  const west=x<AXIS-OFF-2;
+  s.lab.setAttribute("x",west?-16:16);
+  s.lab.setAttribute("text-anchor",west?"end":"start");
+}
+function lerp(a,b,u){return a+(b-a)*u;}
+function ease(u){u=Math.max(0,Math.min(1,u));return u*u*(3-2*u);}
+function pathAt(pts,u){ /* łamana, u 0..1 */
+  let L=0;const seg=[];
+  for(let i=1;i<pts.length;i++){const l=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);seg.push(l);L+=l;}
+  let d=u*L;
+  for(let i=1;i<pts.length;i++){
+    if(d<=seg[i-1]){const v=d/seg[i-1];
+      return {x:lerp(pts[i-1][0],pts[i][0],v), y:lerp(pts[i-1][1],pts[i][1],v)};}
+    d-=seg[i-1];
+  }
+  const p=pts[pts.length-1];return {x:p[0],y:p[1]};
+}
+
+/* las: LINIA frontem do kierunku kontaktu.
+   Środkowy (j=5) kryje TYŁ — odsunięty ZA korytarz wejściowy,
+   więc wbiegający przechodzą za jego plecami, nie w linii ognia. */
+function lineSlot(j){
+  const g=geo();
+  if(j===5) return {x:TREE_X-44-5*24, y:g.gateY + g.sgn*34, ang:(DIR===1?180:0)};
+  const yLine=g.gateY - g.sgn*34;
+  return {x:TREE_X-44-j*24, y:yLine, ang:(DIR===1?0:180)};
+}
+const ENTRY_GUARD=()=>({x:TREE_X-16,y:geo().gateY,ang:90});   /* zabezpieczenie wejścia */
+const SEM_POST=()=>({x:TREE_X+18,y:geo().gateY,ang:270});     /* semafor na wejściu */
+
+/* przydział miejsc w linii wg kolejności wbiegnięcia */
+function lineIndexOf(i){ return ORDER.indexOf(i); }
+
+/* stan i-tego żołnierza w czasie t */
+function soldierState(i,t){
+  const g=geo();
+  const jodAng = FILE(i)<0 ? 315 : 45;
+  const cAng = DIR===1 ? 0 : 180;
+  const p0=CHAINPOS(i);
+  const base=chainXY(i,p0), after1=chainXY(i,p0+6), after2=chainXY(i,p0+12);
+  const out=AXIS+FILE(i)*(OFF+LANE_OUT);
+  const e1=pStart(i);
+
+  /* --- SEMAFOR: przy swojej kolejce w 2. rolowaniu → na wejście, sygnał --- */
+  if(i===SEMAFOR && t>=T_SEMGO){
+    const post=SEM_POST();
+    if(t<T_SEMGO+SEM_DUR){
+      const u=ease((t-T_SEMGO)/SEM_DUR);
+      const p=pathAt([[after1.x,after1.y],[out,after1.y],[out,g.gateY],[post.x,post.y]],u);
+      return {x:p.x,y:p.y,ang:270,sem:u>0.45};
+    }
+    if(t<T_HAND) return {x:post.x,y:post.y,ang:270,sem:true};
+    const eg=ENTRY_GUARD();
+    if(t<T_HAND+HAND_DUR){
+      const u=ease((t-T_HAND)/HAND_DUR);
+      return {x:lerp(post.x,eg.x,u),y:lerp(post.y,eg.y,u),ang:90};
+    }
+    return {x:eg.x,y:eg.y,ang:90,inForest:true};
+  }
+
+  /* --- rolowanie w las (kolejni po semaforze; i<=3 po dodatkowym okrążeniu) --- */
+  if(i!==SEMAFOR){
+    const ed=pStart(divK(i));
+    if(t>=ed){
+      const fromPos = (i<=3)? p0+12 : p0+6;
+      const from=chainXY(i,fromPos);
+      const tgt=lineSlot(lineIndexOf(i));
+      if(t<ed+F_DUR){
+        const u=ease((t-ed)/F_DUR);
+        const p=pathAt([[from.x,from.y],[out,from.y],[out,g.gateY],
+                        [TREE_X+34,g.gateY],[tgt.x,g.gateY],[tgt.x,tgt.y]],u);
+        return {x:p.x,y:p.y,ang: p.x>TREE_X+20 ? cAng : tgt.ang,
+                lastCall: i===LASTIN && u>0.5 && u<0.8};
+      }
+      return {x:tgt.x,y:tgt.y,ang:tgt.ang,inForest:true};
+    }
+  }
+
+  /* --- i<=3: normalne rolowanie w 2. cyklu (zanim wbiegną w las) --- */
+  if(i<=3){
+    const e2=pStart(12+i);
+    if(t>=e2){
+      if(t<e2+P_DUR){
+        const u=ease((t-e2)/P_DUR);
+        const p=pathAt([[after1.x,after1.y],[out,after1.y],[out,after2.y],[after2.x,after2.y]],u);
+        return {x:p.x,y:p.y,ang:cAng,fireTick:u<0.12};
+      }
+      return {x:after2.x,y:after2.y,ang:cAng};
+    }
+  }
+
+  /* --- marsz (zawsze na północ) --- */
+  if(t<T_MARCH){
+    const u=ease(t/T_MARCH);
+    return {x:base.x,y:base.y+lerp(120,0,u),ang:jodAng};
+  }
+  /* --- kontakt: postawa --- */
+  if(t<e1){
+    return {x:base.x,y:base.y,ang:cAng, firing:(i===0||i===1)&&t>T_MARCH+T_SET};
+  }
+  /* --- 1. rolowanie --- */
+  if(t<e1+P_DUR){
+    const u=ease((t-e1)/P_DUR);
+    const p=pathAt([[base.x,base.y],[out,base.y],[out,after1.y],[after1.x,after1.y]],u);
+    return {x:p.x,y:p.y,ang:cAng,fireTick:u<0.12};
+  }
+  return {x:after1.x,y:after1.y,ang:cAng, firing:isFrontNow(i,t)};
+}
+/* skrajny prowadzący ogień (do momentu sygnału semafora) */
+function isFrontNow(i,t){
+  if(t>=T_SEMGO) return false;
+  const f=i%2;
+  let best=-1;
+  for(let k=f;k<16;k+=2){ if(t>=pStart(k)+P_DUR) best=k; else break; }
+  return best>=0 && (best%12)===i;
+}
+
+/* ================= STAN ================= */
+let t=0, playing=false, speed=1; const speeds=[1,2,0.5]; let spdI=0;
+let err=null;
+const alertbox=document.getElementById("alertbox"), okbox=document.getElementById("okbox");
+
+function render(){
+  const g=geo();
+  /* przeciwnik */
+  enemyG.setAttribute("opacity", (t>=T_MARCH && t<T_ALLIN)?1:0);
+  enemyG.setAttribute("transform",`translate(${AXIS},${g.enemyY})`);
+  let semOn=false, lastCall=false;
+  fxLayer.innerHTML="";
+  soldiers.forEach((s,i)=>{
+    const st=soldierState(i,t);
+    place(i,st.x,st.y,st.ang);
+    if(st.sem) semOn=true;
+    if(st.lastCall) lastCall=true;
+    if(st.firing||st.fireTick){
+      const dy=DIR===1?-1:1;
+      el("line",{x1:st.x,y1:st.y+dy*16,x2:st.x,y2:st.y+dy*40,stroke:"#C9A227","stroke-width":4,"stroke-linecap":"round",opacity:.9},fxLayer);
+    }
+  });
+  const sPos=soldiers[SEMAFOR];
+  semG.setAttribute("opacity",semOn?1:0);
+  semG.setAttribute("transform",`translate(${sPos.x-14},${sPos.y})`);
+  /* ogień przeciwnika */
+  if(t>=T_MARCH&&t<T_ALLIN-1.0){
+    const u=(t%0.5)/0.5;
+    if(u<0.4){
+      const dy=DIR===1?1:-1;
+      el("line",{x1:AXIS,y1:g.enemyY+dy*22,x2:AXIS,y2:g.enemyY+dy*70,stroke:"var(--enemy)","stroke-width":4,opacity:.8},fxLayer);
+    }
+  }
+  /* dowódca — rolując — wyznacza semafora (koniec 1. rolowania) */
+  if(t>=pStart(10)&&t<T_ROLL2+0.3){
+    const d=soldiers[10];
+    const u=(t%1.0)/1.0;
+    el("circle",{cx:d.x,cy:d.y,r:16+u*50,fill:"none",stroke:"var(--trail)","stroke-width":2.5,opacity:(1-u)*.7},fxLayer);
+    const tt=el("text",{x:d.x,y:d.y-30,"text-anchor":"middle",fill:"var(--trail)","font-size":22,"font-weight":"bold","font-family":"Arial Narrow"},fxLayer);
+    tt.textContent="DOWÓDCA: SEMAFOR — ZD!";
+  }
+  /* sygnał semafora */
+  if(t>=T_SEMGO+SEM_DUR*0.45 && t<T_SEMGO+SEM_DUR+1.2){
+    const tt=el("text",{x:TREE_X+44,y:g.gateY+44,fill:"var(--trail)","font-size":24,"font-weight":"bold","font-family":"Arial Narrow"},fxLayer);
+    tt.textContent="SYGNAŁ: „SEMAFOR!”";
+  }
+  /* odbicie ostatniego — sygnał do semafora */
+  if(lastCall){
+    const u=(t%0.8)/0.8;
+    el("circle",{cx:sPos.x,cy:sPos.y,r:14+u*40,fill:"none",stroke:"var(--alert)","stroke-width":3,opacity:(1-u)*.8},fxLayer);
+    const tt=el("text",{x:sPos.x+26,y:sPos.y-26,fill:"var(--alert)","font-size":28,"font-weight":"bold","font-family":"Arial Narrow"},fxLayer);
+    tt.textContent="„OSTATNI!”";
+  }
+  /* KONTAKT napis */
+  if(t>=T_MARCH&&t<T_PEEL0+2){
+    const tt=el("text",{x:AXIS,y:DIR===1?g.enemyY+120:g.enemyY-104,"text-anchor":"middle",fill:"var(--alert)","font-size":30,"font-weight":"bold","font-family":"Arial Narrow"},fxLayer);
+    tt.textContent=DIR===1?"„KONTAKT — GODZ. 12!”":"„KONTAKT — GODZ. 6!”";
+  }
+  /* tryb błędu */
+  alertbox.classList.remove("show"); okbox.classList.remove("show");
+  ghost.setAttribute("opacity",0);
+  if(err){
+    const e=err.e, b=chainXY(0,0), a=chainXY(0,6);
+    if(e<2.0){ /* źle: środkiem, przez linię ognia */
+      const u=ease(e/2.0);
+      const p=pathAt([[b.x,b.y],[AXIS,b.y],[AXIS,a.y],[a.x,a.y]],u);
+      ghost.setAttribute("opacity",1);
+      ghost.setAttribute("transform",`translate(${p.x},${p.y})`);
+      if(u>0.2&&u<0.9) alertbox.classList.add("show");
+    }else if(e<4.2){ /* dobrze: zewnętrzną */
+      okbox.classList.add("show");
+      const u=ease((e-2.0)/2.2);
+      const out=AXIS+FILE(0)*(OFF+LANE_OUT);
+      const p=pathAt([[b.x,b.y],[out,b.y],[out,a.y],[a.x,a.y]],u);
+      ghost.setAttribute("opacity",1);
+      ghost.setAttribute("transform",`translate(${p.x},${p.y})`);
+    }else err=null;
+  }
+  /* faza */
+  let ph;
+  if(t<T_MARCH) ph=0;
+  else if(t<T_PEEL0) ph=1;
+  else if(t<T_ROLL2) ph=2;
+  else if(t<T_SEMGO+SEM_DUR) ph=3;
+  else if(t<T_END) ph=4;
+  else {ph=5; if(playing){playing=false;setPlayBtn();}}
+  setPhase(ph);
+}
+
+/* ================= UI ================= */
+const elNum=document.getElementById("phasenum"), elName=document.getElementById("phasename"),
+      elDesc=document.getElementById("phasedesc"), btnPlay=document.getElementById("btnPlay"),
+      btnErr=document.getElementById("btnErr"), btnDir=document.getElementById("btnDir"),
+      card=document.getElementById("card");
+let lastPhase=-1;
+function setPhase(i){
+  if(i===lastPhase) return; lastPhase=i;
+  elNum.textContent=PHASES[i].num; elName.textContent=PHASES[i].name;
+  elDesc.innerHTML=PHASES[i].desc.replace("{G}",DIR===1?"12":"6");
+  btnErr.disabled = t<T_MARCH;
+}
+function setPlayBtn(){btnPlay.textContent=playing?"⏸ PAUZA":"▶ START";btnPlay.classList.toggle("primary",!playing);}
+let cardT=null;
+function showCard(i){
+  const f=ROLES[i].fun?` — ${ROLES[i].fun}`:"";
+  card.textContent=`${ROLES[i].n} · ${ROLES[i].nazwa} · nitka ${FILE(i)<0?"LEWA":"PRAWA"}${f}`;
+  card.classList.add("show");
+  clearTimeout(cardT); cardT=setTimeout(()=>card.classList.remove("show"),2800);
+}
+function toggleLegend(){document.getElementById("legend").classList.toggle("show");}
+function toggleOpis(){document.getElementById("opis").classList.toggle("show");}
+document.getElementById("btnLeg").onclick=toggleLegend;
+document.getElementById("btnOpis").onclick=toggleOpis;
+const legtable=document.getElementById("legtable");
+ROLES.forEach((r,i)=>{
+  const tr=document.createElement("tr");
+  const f=r.fun?` · ${r.fun}`:"";
+  tr.innerHTML=`<td>${r.n}</td><td>${r.kod}</td><td>${r.nazwa}</td><td class="sekt">nitka ${FILE(i)<0?"L":"P"}${f}</td>`;
+  legtable.appendChild(tr);
+});
+btnPlay.onclick=()=>{playing=!playing;setPlayBtn();};
+document.getElementById("btnRst").onclick=()=>{t=0;err=null;playing=false;setPlayBtn();lastPhase=-1;render();};
+document.getElementById("btnSpd").onclick=(e)=>{spdI=(spdI+1)%speeds.length;speed=speeds[spdI];e.target.textContent="×"+speed;};
+btnDir.onclick=()=>{DIR=-DIR;btnDir.textContent="KONTAKT: "+(DIR===1?"PRZÓD":"TYŁ");t=0;err=null;playing=false;setPlayBtn();lastPhase=-1;render();};
+btnErr.onclick=()=>{ if(t<T_MARCH) return; t=Math.min(Math.max(t,T_PEEL0),T_PEEL0); err={e:0}; playing=true; setPlayBtn(); };
+const MARKS=[0,T_MARCH,T_PEEL0,T_ROLL2,T_SEMGO,T_END];
+function jump(dir){
+  let cur=0; for(let i=0;i<MARKS.length;i++) if(t>MARKS[i]-0.05) cur=i;
+  const tgt=Math.max(0,Math.min(MARKS.length-1,cur+dir));
+  t=MARKS[tgt]; err=null; lastPhase=-1; render();
+}
+document.getElementById("btnNext").onclick=()=>jump(1);
+document.getElementById("btnPrev").onclick=()=>jump(-1);
+
+/* ================= PĘTLA ================= */
+let lastT=performance.now();
+function tick(now){
+  const dt=Math.min(0.05,(now-lastT)/1000); lastT=now;
+  if(playing){ if(err) err.e+=dt*speed; else t+=dt*speed; }
+  render();
+  requestAnimationFrame(tick);
+}
+if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){playing=false;}
+render(); setPlayBtn();
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
